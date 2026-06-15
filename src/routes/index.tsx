@@ -677,7 +677,7 @@ function Step4({ go }: { go: (s: Step) => void }) {
                 <Tooltip
                   cursor={{ fill: "rgba(0,0,0,0.03)" }}
                   contentStyle={{ borderRadius: 8, border: "1px solid #E8E8E4", fontSize: 13 }}
-                  formatter={(v: number) => [`${v.toLocaleString()} kg CO₂e`, "Emissions"]}
+                  formatter={(v: any) => [`${Number(v).toLocaleString()} kg CO₂e`, "Emissions"]}
                 />
                 <Bar dataKey="value" radius={[0, 6, 6, 0]} onClick={(d: any) => setSelectedHotspot(d.name.toLowerCase())}>
                   {STAGES.map((s, i) => <Cell key={i} fill={s.color} cursor="pointer" />)}
