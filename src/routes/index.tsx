@@ -1367,28 +1367,30 @@ function Dashboard({ go }: { go: (s: Step) => void }) {
 // ─────────────────────────────────────────────────────────────────────
 
 const MODEL_PROCESSES = [
-  { id: "cotton", name: "Organic cotton cultivation", loc: "IN", db: "ecoinvent 3.10", co2: 412, kind: "background" },
-  { id: "rpet", name: "rPET flake, post-consumer", loc: "TR", db: "ecoinvent 3.10", co2: 689, kind: "background" },
-  { id: "yarn", name: "Yarn spinning, blended", loc: "VN", db: "Primary", co2: 184, kind: "foreground" },
-  { id: "weave", name: "Weaving & knitting", loc: "VN", db: "Primary", co2: 312, kind: "foreground" },
-  { id: "dye", name: "Reactive dyeing & finishing", loc: "VN", db: "ecoinvent 3.10", co2: 379, kind: "foreground" },
-  { id: "cutsew", name: "Cut, sew & assembly", loc: "VN", db: "Primary", co2: 156, kind: "foreground" },
-  { id: "pack", name: "Polybag & carton packaging", loc: "VN", db: "ecoinvent 3.10", co2: 48, kind: "foreground" },
+  { id: "cotton", name: "GOTS organic cotton cultivation, Madhya Pradesh", loc: "IN", db: "ecoinvent 3.10", co2: 412, kind: "background" },
+  { id: "ecovero", name: "Lenzing™ EcoVero™ viscose fibre", loc: "AT", db: "Lenzing EPD", co2: 689, kind: "background" },
+  { id: "yarn", name: "Ring-spun yarn, Arvind Naroda", loc: "IN", db: "Primary (Arvind)", co2: 184, kind: "foreground" },
+  { id: "weave", name: "Single-jersey knitting, 195 GSM", loc: "IN", db: "Primary (Arvind)", co2: 312, kind: "foreground" },
+  { id: "dye", name: "Bluesign® reactive dye + finishing", loc: "IN", db: "Higg MSI 3.7", co2: 379, kind: "foreground" },
+  { id: "cutsew", name: "Cut, sew & snap assembly — Shahi Unit 8", loc: "IN", db: "Primary (Shahi)", co2: 156, kind: "foreground" },
+  { id: "pack", name: "FSC™ hangtag + recycled carton pack-out", loc: "IN", db: "ecoinvent 3.10", co2: 48, kind: "foreground" },
   { id: "freight", name: "Sea freight, Mundra → Savannah, GA", loc: "—", db: "ecoinvent 3.10", co2: 421, kind: "background" },
-  { id: "tote", name: "Little Planet Sleep & Play 3-Pack", loc: "EU", db: "Reference product", co2: 3240, kind: "product" },
+  { id: "tote", name: "Little Planet™ Sleep & Play 3-Pack (FU)", loc: "US", db: "Reference product", co2: 3240, kind: "product" },
 ];
 
 const TECHNO_FLOWS = [
-  { name: "Organic cotton fibre", category: "Materials / Natural fibres", qty: "0.180", unit: "kg", provider: "Organic cotton cultivation | IN", source: "Primary" },
-  { name: "rPET flake", category: "Materials / Recycled polymers", qty: "0.120", unit: "kg", provider: "rPET flake, post-consumer | TR", source: "Primary" },
-  { name: "Electricity, medium voltage", category: "Energy / Grid", qty: "1.420", unit: "kWh", provider: "Market for electricity | VN", source: "ecoinvent" },
-  { name: "Heat, natural gas", category: "Energy / Thermal", qty: "0.640", unit: "MJ", provider: "Steam production | VN", source: "ecoinvent" },
-  { name: "Water, deionised", category: "Process water", qty: "11.20", unit: "L", provider: "Tap water | VN", source: "ecoinvent" },
-  { name: "Reactive dye, mixed", category: "Chemicals / Dyes", qty: "0.014", unit: "kg", provider: "Dye production | RoW", source: "AI estimated" },
+  { name: "Organic cotton fibre (GOTS)", category: "Materials / Natural fibres", qty: "0.202", unit: "kg", provider: "GOTS cotton cultivation | IN-MP", source: "Primary" },
+  { name: "Lenzing™ EcoVero™ viscose", category: "Materials / Cellulosic", qty: "0.134", unit: "kg", provider: "EcoVero™ fibre | AT", source: "Lenzing EPD" },
+  { name: "Brass snap, nickel-free (YKK SNAD)", category: "Components / Trims", qty: "0.012", unit: "kg", provider: "Snap forming | IN-Tirupur", source: "Primary" },
+  { name: "Electricity, medium voltage", category: "Energy / Grid", qty: "1.420", unit: "kWh", provider: "Market for electricity | IN-South", source: "ecoinvent" },
+  { name: "Heat, natural gas (boiler)", category: "Energy / Thermal", qty: "0.640", unit: "MJ", provider: "Steam production | IN", source: "ecoinvent" },
+  { name: "Process water (RO)", category: "Process water", qty: "11.20", unit: "L", provider: "Tap water | IN", source: "ecoinvent" },
+  { name: "Reactive dye, Bluesign® bAsic", category: "Chemicals / Dyes", qty: "0.014", unit: "kg", provider: "Dye production | RoW", source: "AI estimated" },
   { name: "Sodium hydroxide, 50%", category: "Chemicals / Inorganic", qty: "0.022", unit: "kg", provider: "NaOH production | RER", source: "ecoinvent" },
-  { name: "LDPE polybag", category: "Packaging", qty: "0.008", unit: "kg", provider: "LDPE film | GLO", source: "ecoinvent" },
-  { name: "Corrugated board", category: "Packaging", qty: "0.045", unit: "kg", provider: "Corrugated board, recycled | EU", source: "ecoinvent" },
-  { name: "Transport, sea, container ship", category: "Logistics", qty: "14.20", unit: "tkm", provider: "Sea freight, Mundra→Savannah | GLO", source: "ecoinvent" },
+  { name: "FSC™ hangtag (recycled paper)", category: "Packaging", qty: "0.006", unit: "kg", provider: "FSC paper | EU", source: "ecoinvent" },
+  { name: "Corrugated carton, master pack", category: "Packaging", qty: "0.045", unit: "kg", provider: "Corrugated board, recycled | IN", source: "ecoinvent" },
+  { name: "Transport, sea, container ship", category: "Logistics", qty: "13.80", unit: "tkm", provider: "Sea freight, Mundra→Savannah | GLO", source: "ecoinvent" },
+  { name: "Transport, truck, drayage GA", category: "Logistics", qty: "0.420", unit: "tkm", provider: "Truck, EURO 5 equiv | US", source: "ecoinvent" },
 ];
 
 const ELEM_FLOWS = [
