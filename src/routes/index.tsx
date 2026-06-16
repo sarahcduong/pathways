@@ -634,6 +634,7 @@ const HOTSPOTS = [
 
 function Step4({ go }: { go: (s: Step) => void }) {
   const [selectedHotspot, setSelectedHotspot] = useState("materials");
+  const _back = "model";
 
   return (
     <div style={{ padding: 40 }}>
