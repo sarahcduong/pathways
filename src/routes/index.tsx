@@ -10,7 +10,7 @@ export const Route = createFileRoute("/")({
 // Types & shared state
 // ─────────────────────────────────────────────────────────────────────
 
-type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7 | "dashboard" | "model";
+type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7 | "dashboard" | "model" | "prm";
 type Toast = { id: number; kind: "success" | "warning" | "info"; text: string };
 
 type LcaData = {
@@ -167,6 +167,7 @@ function ImpactBridgeApp() {
       }}>
         <div className="fade-in" key={String(currentStep)}>
           {currentStep === 1 && <Step1 lcaData={lcaData} setLcaData={setLcaData} go={go} />}
+          {currentStep === "prm" && <StepPRM lcaData={lcaData} go={go} pushToast={pushToast} />}
           {currentStep === 2 && <Step2 lcaData={lcaData} go={go} pushToast={pushToast} />}
           {currentStep === 3 && <Step3 go={go} />}
           {currentStep === "model" && <StepModel go={go} />}
@@ -379,8 +380,8 @@ function Step1({ lcaData, setLcaData, go }: { lcaData: LcaData; setLcaData: (f: 
           <div>· Send data requests to 4 teams</div>
         </div>
 
-        <button onClick={() => go(2)} className="btn btn-primary" style={{ width: "100%", marginTop: 24, padding: "14px" }}>
-          Start LCA →
+        <button onClick={() => go("prm")} className="btn btn-primary" style={{ width: "100%", marginTop: 24, padding: "14px" }}>
+          Connect PRM & start LCA →
         </button>
       </div>
     </div>
@@ -404,7 +405,7 @@ function Step2({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) => 
 
   return (
     <div style={{ padding: 40 }}>
-      <BackBtn go={go} to={1} />
+      <BackBtn go={go} to="prm" />
       <Eyebrow>Step 2 of 7 — Data Collection</Eyebrow>
       <h1 className="page-title" style={{ marginBottom: 10 }}>Requests sent to 4 teams.</h1>
       <p className="body-text" style={{ maxWidth: 720, marginBottom: 32 }}>
@@ -1685,6 +1686,192 @@ function FlowTable({ rows, cols }: { rows: FlowRow[]; cols: string[] }) {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// PRM INTEGRATION — How we knew who to ask
+// ─────────────────────────────────────────────────────────────────────
+
+const PRM_FIELDS = [
+  { sf: "Account.Industry", maps: "Product category", val: "Apparel & Textiles", conf: "exact" },
+  { sf: "Product2.Family", maps: "Functional unit basis", val: "Recycled Tote Bag · 1 unit", conf: "exact" },
+  { sf: "Account.Supplier_Tier__c", maps: "Upstream boundary depth", val: "Tier 1 + Tier 2 (12 suppliers)", conf: "exact" },
+  { sf: "Opportunity.Manufacturing_Site__c", maps: "Operations facility", val: "Ho Chi Minh City, VN", conf: "exact" },
+  { sf: "Contact.Department + Role", maps: "Data owner routing", val: "4 owners auto-identified", conf: "rule" },
+];
+
+const PRM_OWNERS = [
+  { dept: "Procurement", icon: <I.box />, name: "Maria Chen", title: "Head of Procurement", sfRole: "Supplier Relationship Owner", queries: ["Account.Supplier__r where Tier ≤ 2", "Contract.Material_Spec__c"], why: "Owns 11 of 12 supplier contracts in scope" },
+  { dept: "Design & R&D", icon: <I.pencil />, name: "James Park", title: "Senior Product Designer", sfRole: "Product2 Owner", queries: ["Product2.Bill_of_Materials__c", "Product2.Weight_g__c"], why: "Listed as primary owner on Product2 record SKU-TB-018" },
+  { dept: "Operations", icon: <I.factory />, name: "Sarah Williams", title: "VP Operations", sfRole: "Site Lead — HCMC", queries: ["Manufacturing_Site__c where Region = APAC", "Energy_Log__c (last 90d)"], why: "Single VP role tied to the HCMC facility account" },
+  { dept: "Logistics", icon: <I.truck />, name: "David Kim", title: "Logistics Manager", sfRole: "Shipment Owner", queries: ["Shipment__c where Product2 = SKU-TB-018", "Carrier__r.Mode"], why: "Owns 100% of outbound shipments for this SKU YTD" },
+];
+
+function StepPRM({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) => void; pushToast: (t: string, k?: Toast["kind"]) => void }) {
+  const [connected, setConnected] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [lastSync, setLastSync] = useState("2 min ago");
+  const [provider, setProvider] = useState<"salesforce" | "hubspot" | "dynamics">("salesforce");
+
+  function resync() {
+    setSyncing(true);
+    setTimeout(() => { setSyncing(false); setLastSync("just now"); pushToast("PRM resynced — 4 owners confirmed", "success"); }, 1100);
+  }
+
+  return (
+    <div style={{ padding: 40, maxWidth: 1180 }}>
+      <BackBtn go={go} to={1} />
+      <StepDots current={1} />
+      <Eyebrow>Step 1.5 — PRM Integration</Eyebrow>
+      <h1 className="page-title" style={{ marginBottom: 10 }}>How we knew who to ask.</h1>
+      <p className="body-text" style={{ maxWidth: 720, marginBottom: 28 }}>
+        ImpactBridge connects to your partner relationship system to map every data point in the LCA scope to a real person — no spreadsheets, no guessing who owns what.
+      </p>
+
+      {/* Connection bar */}
+      <div className="card" style={{ padding: 18, marginBottom: 24, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <div style={{
+            width: 44, height: 44, borderRadius: 10, background: "#00A1E0",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            color: "white", fontWeight: 700, fontSize: 13, letterSpacing: "-0.02em",
+          }}>SF</div>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontWeight: 500 }}>Salesforce — Acme Brands Production Org</span>
+              {connected && <span className="chip chip-green"><span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--green-dark)" }} /> Connected</span>}
+            </div>
+            <div style={{ fontSize: 13, color: "var(--text-tertiary)", marginTop: 2 }}>
+              acme.my.salesforce.com · OAuth 2.0 · Read-only · Last sync {lastSync}
+            </div>
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <select
+            value={provider}
+            onChange={(e) => { setProvider(e.target.value as typeof provider); pushToast(`Switched provider to ${e.target.value}`, "info"); }}
+            className="input" style={{ width: "auto", padding: "8px 12px", fontSize: 13 }}
+          >
+            <option value="salesforce">Salesforce</option>
+            <option value="hubspot">HubSpot</option>
+            <option value="dynamics">Microsoft Dynamics</option>
+          </select>
+          <button onClick={resync} className="btn btn-outline btn-sm" disabled={syncing}>
+            {syncing ? <><span className="spinner" style={{ borderTopColor: "var(--text-primary)" }} /> Syncing…</> : "Resync"}
+          </button>
+          <button onClick={() => setConnected(!connected)} className="btn btn-ghost btn-sm">
+            {connected ? "Disconnect" : "Reconnect"}
+          </button>
+        </div>
+      </div>
+
+      {/* Field mapping */}
+      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 20 }}>
+        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+          <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div className="card-title">Field mapping</div>
+            <span className="chip chip-gray">{PRM_FIELDS.length} fields resolved</span>
+          </div>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: "var(--gray-section)", color: "var(--text-tertiary)" }}>
+                <th style={{ textAlign: "left", padding: "10px 20px", fontSize: 11, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>Salesforce field</th>
+                <th style={{ textAlign: "left", padding: "10px 12px", fontSize: 11, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>Maps to</th>
+                <th style={{ textAlign: "left", padding: "10px 20px", fontSize: 11, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              {PRM_FIELDS.map((f) => (
+                <tr key={f.sf} style={{ borderTop: "1px solid var(--border)" }}>
+                  <td style={{ padding: "12px 20px" }}><span className="mono" style={{ color: "var(--text-primary)" }}>{f.sf}</span></td>
+                  <td style={{ padding: "12px 12px", color: "var(--text-secondary)" }}>{f.maps}</td>
+                  <td style={{ padding: "12px 20px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span>{f.val}</span>
+                      <span className={f.conf === "exact" ? "chip chip-green" : "chip chip-blue"} style={{ fontSize: 10 }}>
+                        {f.conf === "exact" ? "exact match" : "routing rule"}
+                      </span>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="card">
+          <div className="card-title" style={{ marginBottom: 12 }}>Routing logic</div>
+          <p className="body-text" style={{ fontSize: 13, marginBottom: 14 }}>
+            Each LCA data category is routed to the Salesforce contact whose role + account ownership best matches the request.
+          </p>
+          <div className="mono" style={{
+            background: "var(--gray-section)", padding: 14, borderRadius: 10,
+            fontSize: 12, lineHeight: 1.7, color: "var(--text-primary)",
+          }}>
+{`SELECT Contact.Id, Contact.Email,
+       Contact.Department, Contact.Role
+FROM   Contact
+WHERE  AccountId IN :scopedAccounts
+  AND  Role IN ('Procurement','Design',
+                'Operations','Logistics')
+  AND  IsActive = TRUE
+ORDER BY LastActivityDate DESC`}
+          </div>
+          <div style={{ marginTop: 12, fontSize: 12, color: "var(--text-tertiary)" }}>
+            Query runs against your org. ImpactBridge never writes back.
+          </div>
+        </div>
+      </div>
+
+      {/* Identified owners */}
+      <div style={{ marginTop: 28 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
+          <h2 className="section-title">4 data owners identified</h2>
+          <span style={{ fontSize: 13, color: "var(--text-tertiary)" }}>Resolved from 1,284 contacts across 3 accounts</span>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          {PRM_OWNERS.map((o) => (
+            <div key={o.dept} className="card card-hover">
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{
+                    width: 38, height: 38, borderRadius: 10, background: "var(--green-light)",
+                    color: "var(--green-dark)", display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>{o.icon}</div>
+                  <div>
+                    <div style={{ fontWeight: 500 }}>{o.name}</div>
+                    <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>{o.title} · {o.dept}</div>
+                  </div>
+                </div>
+                <span className="chip chip-blue" style={{ fontSize: 10 }}>SF · {o.sfRole}</span>
+              </div>
+              <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 10, fontStyle: "italic" }}>
+                Why this person: {o.why}
+              </div>
+              <div style={{ borderTop: "1px solid var(--border)", paddingTop: 10 }}>
+                <div className="label" style={{ marginBottom: 6 }}>Sourced from</div>
+                {o.queries.map((q) => (
+                  <div key={q} className="mono" style={{ fontSize: 11, color: "var(--text-secondary)", padding: "2px 0" }}>· {q}</div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{
+        marginTop: 28, padding: 16, background: "var(--green-light)",
+        border: "1px solid var(--green-border)", borderRadius: 12, fontSize: 14, lineHeight: 1.7,
+      }}>
+        <div style={{ fontWeight: 500, marginBottom: 6 }}>Next: ImpactBridge will send each owner a focused request form covering only the data they own.</div>
+        <div style={{ color: "var(--text-secondary)" }}>Forms auto-prefill 38 fields from Salesforce ({lcaData.productName}, BOM, supplier list, site address). Owners only fill what we can't pull automatically.</div>
+      </div>
+
+      <button onClick={() => go(2)} className="btn btn-primary" style={{ width: "100%", marginTop: 24, padding: 14 }}>
+        Send requests to 4 teams →
+      </button>
     </div>
   );
 }
