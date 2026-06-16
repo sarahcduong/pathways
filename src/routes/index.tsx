@@ -1793,7 +1793,7 @@ function StepPRM({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) =
 
   function resync() {
     setSyncing(true);
-    setTimeout(() => { setSyncing(false); setLastSync("just now"); pushToast("PRM resynced — 4 owners confirmed", "success"); }, 1100);
+    setTimeout(() => { setSyncing(false); setLastSync("just now"); pushToast("PRM resynced — 16 owners confirmed across internal + external partners", "success"); }, 1100);
   }
 
   return (
