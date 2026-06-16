@@ -10,7 +10,7 @@ export const Route = createFileRoute("/")({
 // Types & shared state
 // ─────────────────────────────────────────────────────────────────────
 
-type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7 | "dashboard";
+type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7 | "dashboard" | "model";
 type Toast = { id: number; kind: "success" | "warning" | "info"; text: string };
 
 type LcaData = {
@@ -169,6 +169,7 @@ function ImpactBridgeApp() {
           {currentStep === 1 && <Step1 lcaData={lcaData} setLcaData={setLcaData} go={go} />}
           {currentStep === 2 && <Step2 lcaData={lcaData} go={go} pushToast={pushToast} />}
           {currentStep === 3 && <Step3 go={go} />}
+          {currentStep === "model" && <StepModel go={go} />}
           {currentStep === 4 && <Step4 go={go} />}
           {currentStep === 5 && <Step5 setLcaData={setLcaData} go={go} pushToast={pushToast} />}
           {currentStep === 6 && <Step6 setLcaData={setLcaData} go={go} pushToast={pushToast} />}
@@ -606,8 +607,8 @@ function Step3({ go }: { go: (s: Step) => void }) {
         </div>
       </div>
 
-      <button onClick={() => go(4)} className="btn btn-primary" style={{ width: "100%", marginTop: 28, padding: 14 }}>
-        Calculate footprint →
+      <button onClick={() => go("model")} className="btn btn-primary" style={{ width: "100%", marginTop: 28, padding: 14 }}>
+        Build the model →
       </button>
     </div>
   );
@@ -636,7 +637,7 @@ function Step4({ go }: { go: (s: Step) => void }) {
 
   return (
     <div style={{ padding: 40 }}>
-      <BackBtn go={go} to={3} />
+      <BackBtn go={go} to={"model"} />
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 28, flexWrap: "wrap", gap: 16 }}>
         <div>
           <Eyebrow>Step 4 of 7 — Footprint Breakdown</Eyebrow>
