@@ -469,9 +469,18 @@ function Step2({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) => 
       <BackBtn go={go} to="prm" />
       <Eyebrow>Data Collection</Eyebrow>
       <h1 className="page-title" style={{ marginBottom: 10 }}>Requests sent to {total} owners.</h1>
-      <p className="body-text" style={{ maxWidth: 760, marginBottom: 32 }}>
-        Each of the {total} owners identified via Salesforce — {internalTotal} inside Carter's, {externalTotal} at vendor accounts — received a focused Pathways Data Request scoped to only the data they own. {done} have signed and submitted; {pending} are still outstanding.
-      </p>
+      <div style={{ maxWidth: 1100, marginBottom: 32 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+          <span style={{ fontSize: 14, fontWeight: 500 }}>{done} of {total} responses received · waiting on {pending}</span>
+          <span style={{ fontSize: 13, color: "var(--text-tertiary)" }}>{Math.round((done / total) * 100)}%</span>
+        </div>
+        <div style={{ height: 6, background: "var(--border-solid)", borderRadius: 4, overflow: "hidden" }}>
+          <div style={{ width: `${(done / total) * 100}%`, height: "100%", background: "var(--green-dark)", transition: "width 400ms ease" }} />
+        </div>
+        <div style={{ marginTop: 10, fontSize: 13, color: "var(--text-secondary)" }}>
+          Internal: {internalDone}/{internalTotal} · External: {externalDone}/{externalTotal}. Pathways will continue with available data — missing inputs are filled with ecoinvent 3.10 + Higg MSI 3.7 benchmarks and flagged in the audit trail.
+        </div>
+      </div>
 
       {(["internal", "external"] as const).map((g) => {
         const items = REQUESTS.filter((r) => r.group === g);
@@ -530,19 +539,6 @@ function Step2({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) => 
           </div>
         );
       })}
-
-      <div style={{ maxWidth: 1100, marginTop: 8 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-          <span style={{ fontSize: 14, fontWeight: 500 }}>{done} of {total} responses received · waiting on {pending}</span>
-          <span style={{ fontSize: 13, color: "var(--text-tertiary)" }}>{Math.round((done / total) * 100)}%</span>
-        </div>
-        <div style={{ height: 6, background: "var(--border-solid)", borderRadius: 4, overflow: "hidden" }}>
-          <div style={{ width: `${(done / total) * 100}%`, height: "100%", background: "var(--green-dark)", transition: "width 400ms ease" }} />
-        </div>
-        <div style={{ marginTop: 10, fontSize: 13, color: "var(--text-secondary)" }}>
-          Internal: {internalDone}/{internalTotal} · External: {externalDone}/{externalTotal}. Pathways will continue with available data — missing inputs are filled with ecoinvent 3.10 + Higg MSI 3.7 benchmarks and flagged in the audit trail.
-        </div>
-      </div>
 
       <div style={{ display: "flex", gap: 10, marginTop: 28 }}>
         <button onClick={() => go(3)} className="btn btn-primary">Continue with available data →</button>
@@ -1925,11 +1921,8 @@ function StepPRM({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) =
                       </div>
                       <span className={isExternal ? "chip chip-blue" : "chip chip-gray"} style={{ fontSize: 10 }}>{o.sfRole}</span>
                     </div>
-                    <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 10, fontStyle: "italic" }}>
-                      Why this person: {o.why}
-                    </div>
                     <div style={{ borderTop: "1px solid var(--border)", paddingTop: 10 }}>
-                      <div className="label" style={{ marginBottom: 6 }}>Sourced from</div>
+                      <div className="label" style={{ marginBottom: 6 }}>Deliverables needed:</div>
                       {o.queries.map((q) => (
                         <div key={q} className="mono" style={{ fontSize: 11, color: "var(--text-secondary)", padding: "2px 0" }}>· {q}</div>
                       ))}
