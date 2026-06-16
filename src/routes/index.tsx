@@ -67,10 +67,10 @@ const I = {
 function ImpactBridgeApp() {
   const [currentStep, setCurrentStep] = useState<Step>(1);
   const [lcaData, setLcaData] = useState<LcaData>({
-    productName: "Recycled Tote Bag",
-    category: "Apparel & Textiles",
+    productName: "Little Planet™ Organic Sleep & Play (3-Pack)",
+    category: "Babywear · Knit Sleepwear",
     boundary: "cradle-to-gate",
-    goals: ["Reduce carbon footprint", "Cut material costs"],
+    goals: ["Sustainably Made — expand GOTS organic cotton", "Safe for Kids — eliminate restricted chemistries"],
     dataResponses: { procurement: true, design: true, operations: false, logistics: false },
     selectedPlay: null,
     selectedArtifact: "rfp",
@@ -165,7 +165,7 @@ function ImpactBridgeApp() {
           <button style={{ width: "100%", textAlign: "left", padding: "8px 12px", borderRadius: 8, fontSize: 14 }}>Settings</button>
           <div style={{ marginTop: 16, padding: "8px 12px" }}>
             <div style={{ fontSize: 14, fontWeight: 500 }}>Alex Johnson</div>
-            <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>Sourcing Lead</div>
+            <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>Sourcing Lead — Carter's, Inc.</div>
           </div>
         </div>
       </aside>
@@ -280,13 +280,19 @@ function BackBtn({ go, to }: { go: (s: Step) => void; to: Step }) {
 
 function Step1({ lcaData, setLcaData, go }: { lcaData: LcaData; setLcaData: (f: (d: LcaData) => LcaData) => void; go: (s: Step) => void }) {
   const [categoryOpen, setCategoryOpen] = useState(false);
-  const categories = ["Apparel & Textiles", "Footwear", "Packaging", "Electronics", "Food & Beverage", "Furniture", "Industrial", "Other"];
+  const categories = ["Babywear · Knit Sleepwear", "Footwear", "Packaging", "Electronics", "Food & Beverage", "Furniture", "Industrial", "Other"];
   const boundaries = [
     { id: "cradle-to-gate", title: "Cradle to Gate", icon: <I.factory />, desc: "Raw materials through manufacturing. Common for B2B suppliers." },
     { id: "cradle-to-grave", title: "Cradle to Grave", icon: <I.cycle />, desc: "Full lifecycle including consumer use and disposal. Required for EPDs." },
     { id: "gate-to-grave", title: "Gate to Grave", icon: <I.truck />, desc: "From your facility to end of life. For distribution and retail focus." },
   ];
-  const goals = ["Reduce carbon footprint", "Cut material costs", "Meet supplier compliance requirements", "Prepare for CSRD reporting"];
+  const goals = [
+    "Sustainably Made — expand GOTS organic cotton",
+    "Safe for Kids — eliminate restricted chemistries (ZDHC MRSL)",
+    "Tough for Play — durability ≥ 50 wash cycles",
+    "Reduce Scope 3.1 emissions vs. FY24 baseline",
+    "Waste: divert ≥ 90% manufacturing scrap from landfill",
+  ];
 
   function toggleGoal(g: string) {
     setLcaData((d) => {
@@ -315,7 +321,7 @@ function Step1({ lcaData, setLcaData, go }: { lcaData: LcaData; setLcaData: (f: 
               className="input"
               value={lcaData.productName}
               onChange={(e) => setLcaData((d) => ({ ...d, productName: e.target.value }))}
-              placeholder="e.g. Organic cotton tote bag, Running shoe, Cardboard packaging"
+              placeholder="Search Carter's product DB — e.g. Little Planet Sleep & Play, OshKosh denim short, Carter's bodysuit 5-pack"
             />
           </div>
 
@@ -349,7 +355,7 @@ function Step1({ lcaData, setLcaData, go }: { lcaData: LcaData; setLcaData: (f: 
               </div>
             )}
             <div style={{ marginTop: 8, padding: "10px 14px", background: "var(--gray-section)", borderRadius: 8, fontSize: 13, color: "var(--text-secondary)" }}>
-              We'll apply PEFCR-aligned methodology and EPA USEEIO emission factors for this category.
+              We'll apply PEFCR-aligned methodology and ecoinvent 3.10 + Higg MSI 3.7 emission factors for this category.
             </div>
           </div>
 
@@ -406,7 +412,7 @@ function Step1({ lcaData, setLcaData, go }: { lcaData: LcaData; setLcaData: (f: 
           <div style={{ fontWeight: 500, marginBottom: 6 }}>Based on your inputs, ImpactBridge will:</div>
           <div>· Set your functional unit to 1 unit of {lcaData.productName}</div>
           <div>· Apply {lcaData.boundary.replace(/-/g, " ")} system boundary</div>
-          <div>· Use EPA USEEIO {lcaData.category} emission factors</div>
+          <div>· Use ecoinvent 3.10 + Higg MSI 3.7 {lcaData.category} emission factors</div>
           <div>· Send data requests to 4 teams</div>
         </div>
 
@@ -423,10 +429,10 @@ function Step1({ lcaData, setLcaData, go }: { lcaData: LcaData; setLcaData: (f: 
 // ─────────────────────────────────────────────────────────────────────
 
 const REQUESTS = [
-  { id: "procurement", icon: <I.box />, title: "Procurement", body: "Supplier list, material composition, and unit costs", who: "Maria Chen · Head of Procurement", sent: "June 13, 2026 at 9:04am", received: "June 13, 2026 at 2:31pm", status: "done" as const },
-  { id: "design", icon: <I.pencil />, title: "Design & R&D", body: "Bill of materials, material weights, product dimensions", who: "James Park · Senior Product Designer", sent: "June 13, 2026 at 9:04am", received: "June 14, 2026 at 10:17am", status: "done" as const },
-  { id: "operations", icon: <I.factory />, title: "Operations", body: "Manufacturing energy consumption, facility location, process steps", who: "Sarah Williams · VP Operations", sent: "June 13, 2026 at 9:04am", received: "—", status: "pending" as const },
-  { id: "logistics", icon: <I.truck />, title: "Logistics", body: "Transport distances, shipping methods, warehouse locations", who: "David Kim · Logistics Manager", sent: "June 13, 2026 at 9:04am", received: "—", status: "pending" as const },
+  { id: "procurement", icon: <I.box />, title: "Sourcing — Babywear", body: "Supplier list, fabric blend, certifications (GOTS, OEKO-TEX), unit FOB cost", who: "Priya Raghavan · Director, Sourcing — Babywear", sent: "June 13, 2026 at 9:04am", received: "June 13, 2026 at 2:31pm", status: "done" as const },
+  { id: "design", icon: <I.pencil />, title: "Design & Product Development", body: "Bill of materials, garment weight, snap & trim spec, durability target (wash cycles)", who: "Megan O'Connell · Senior Designer, Little Planet™", sent: "June 13, 2026 at 9:04am", received: "June 14, 2026 at 10:17am", status: "done" as const },
+  { id: "operations", icon: <I.factory />, title: "Manufacturing Ops", body: "Tier 1 facility energy mix, dyehouse process, scrap diversion rate", who: "Rakesh Iyer · Mfg Ops Lead, India South", sent: "June 13, 2026 at 9:04am", received: "—", status: "pending" as const },
+  { id: "logistics", icon: <I.truck />, title: "Global Logistics", body: "Mundra → Savannah lane, container utilization, inland drayage to Braselton, GA DC", who: "Daniel Reyes · Sr. Manager, Global Logistics", sent: "June 13, 2026 at 9:04am", received: "—", status: "pending" as const },
 ];
 
 function Step2({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) => void; pushToast: (t: string, k?: Toast["kind"]) => void }) {
@@ -486,7 +492,7 @@ function Step2({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) => 
           <div style={{ width: `${(done / 4) * 100}%`, height: "100%", background: "var(--green-dark)", transition: "width 400ms ease" }} />
         </div>
         <div style={{ marginTop: 10, fontSize: 13, color: "var(--text-secondary)" }}>
-          The platform will continue to the next step using available data. Missing inputs will be filled with EPA USEEIO benchmarks.
+          The platform will continue to the next step using available data. Missing inputs will be filled with ecoinvent 3.10 + Higg MSI 3.7 benchmarks.
         </div>
       </div>
 
@@ -498,7 +504,7 @@ function Step2({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) => 
       </div>
 
       {modalOpen && (
-        <Modal onClose={() => setModalOpen(false)} title="Procurement Response — Maria Chen"
+        <Modal onClose={() => setModalOpen(false)} title="Sourcing Response — Priya Raghavan"
           subtitle="Received June 13, 2026 at 2:31pm · Auto-populated into LCA">
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
             <thead>
@@ -510,12 +516,14 @@ function Step2({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) => 
             </thead>
             <tbody>
               {[
-                ["Primary material", "Recycled polyester (60%) + organic cotton (40%)", "Supplier cert"],
-                ["Material weight", "340g per unit", "BOM v3.2"],
-                ["Tier 1 supplier", "EcoFiber Ltd, Vietnam", "Supplier registry"],
-                ["Material cost/unit", "$2.14", "Purchase order"],
-                ["GRS certified", "Yes", "Certificate #GRS-2024-4471"],
-                ["Recycled content", "60% post-consumer", "Third-party verified"],
+                ["Fabric blend", "60% organic cotton (GOTS) + 40% Lenzing™ EcoVero™ viscose", "Supplier cert"],
+                ["Garment weight", "112g per piece · 336g per 3-pack", "Tech pack v4.1"],
+                ["Tier 1 cut & sew", "Shahi Exports — Unit 8, Bengaluru, IN", "Vendor registry"],
+                ["Tier 2 fabric mill", "Arvind Limited — Naroda, Ahmedabad, IN", "Vendor registry"],
+                ["FOB cost / 3-pack", "$4.62", "PO #CT-2026-08841"],
+                ["GOTS certified", "Yes — Scope Certificate #GOTS-IN-9182", "Control Union"],
+                ["OEKO-TEX Std 100", "Class I (suitable for infants)", "Cert #21.HIN.55812"],
+                ["Snap component", "Nickel-free brass, YKK SNAD — Tirupur, IN", "Tech pack"],
               ].map(([f, v, s], i) => (
                 <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}>
                   <td style={{ padding: "12px 8px", fontWeight: 500 }}>{f}</td>
@@ -560,18 +568,19 @@ function Modal({ children, onClose, title, subtitle }: { children: ReactNode; on
 
 function Step3({ go }: { go: (s: Step) => void }) {
   const rows = [
-    ["Product name", "Recycled Tote Bag", "Default"],
-    ["Category", "Apparel & Textiles", "Default"],
+    ["Product name", "Little Planet™ Organic Sleep & Play (3-Pack)", "Default"],
+    ["Category", "Babywear · Knit Sleepwear", "Default"],
     ["Functional unit", "1 unit (340g)", "Default"],
     ["System boundary", "Cradle to gate", "Default"],
-    ["Primary material", "Recycled polyester 60% + organic cotton 40%", "Primary"],
-    ["Material weight", "340g", "Primary"],
-    ["Material cost/unit", "$2.14", "Primary"],
-    ["Tier 1 supplier", "EcoFiber Ltd, Vietnam", "Primary"],
-    ["GRS certified", "Yes", "Primary"],
-    ["Manufacturing energy", "2.8 kWh/unit", "AI Estimated"],
-    ["Transport distance", "14,200 km sea freight", "AI Estimated"],
-    ["Facility energy mix", "Vietnam grid average (0.52 kgCO2e/kWh)", "AI Estimated"],
+    ["Fabric blend", "60% GOTS organic cotton + 40% Lenzing™ EcoVero™ viscose", "Primary"],
+    ["Garment weight", "336g per 3-pack", "Primary"],
+    ["FOB cost / 3-pack", "$4.62", "Primary"],
+    ["Tier 1 cut & sew", "Shahi Exports — Unit 8, Bengaluru, IN", "Primary"],
+    ["Tier 2 fabric mill", "Arvind Limited — Naroda, IN", "Primary"],
+    ["GOTS / OEKO-TEX", "GOTS Scope Cert + OEKO-TEX Class I", "Primary"],
+    ["Manufacturing energy", "2.8 kWh / 3-pack", "AI Estimated"],
+    ["Transport distance", "13,800 km sea (Mundra → Savannah)", "AI Estimated"],
+    ["Facility energy mix", "India South grid (0.71 kgCO₂e/kWh)", "AI Estimated"],
   ];
 
   function badge(s: string) {
@@ -586,7 +595,7 @@ function Step3({ go }: { go: (s: Step) => void }) {
       <Eyebrow>AI Gap-Filling</Eyebrow>
       <h1 className="page-title" style={{ marginBottom: 10 }}>2 inputs are missing. We've filled them.</h1>
       <p className="body-text" style={{ maxWidth: 760, marginBottom: 32 }}>
-        Where primary data wasn't available, ImpactBridge used EPA USEEIO benchmark data for Apparel & Textiles. Every estimated field is clearly labeled so you always know what's primary vs. filled.
+        Where primary data wasn't available, ImpactBridge used ecoinvent 3.10 + Higg MSI 3.7 benchmark data for Babywear · Knit Sleepwear. Every estimated field is clearly labeled so you always know what's primary vs. filled.
       </p>
 
       <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 24 }}>
@@ -617,7 +626,7 @@ function Step3({ go }: { go: (s: Step) => void }) {
           <div className="card">
             <div className="card-title" style={{ marginBottom: 10 }}>About AI-estimated inputs</div>
             <p className="body-text" style={{ fontSize: 14 }}>
-              When team data isn't available yet, ImpactBridge fills gaps using the US EPA USEEIO model — the same dataset Fortune 500 companies use for Scope 3 disclosure. Benchmark values are conservative and based on industry averages for your product category and region.
+              When team data isn't available yet, ImpactBridge fills gaps using the ecoinvent 3.10 + Higg MSI 3.7 model — the same dataset Fortune 500 companies use for Scope 3 disclosure. Benchmark values are conservative and based on industry averages for your product category and region.
             </p>
             <p className="body-text" style={{ fontSize: 14, marginTop: 10 }}>
               As your team submits their responses, estimated fields are automatically replaced with primary data. Your LCA accuracy score improves over time.
@@ -658,9 +667,9 @@ const STAGES = [
 ];
 
 const HOTSPOTS = [
-  { id: "materials", badge: "Materials", badgeColor: "green", title: "Raw material extraction and processing", co2: "1,976 kg CO₂e · 61% of total", note: "Recycled polyester and organic cotton blends still carry significant upstream emissions." },
-  { id: "manufacturing", badge: "Manufacturing", badgeColor: "amber", title: "Energy use at Tier 1 facility (Vietnam)", co2: "648 kg CO₂e · 20% of total", note: "Vietnam grid average is 0.52 kgCO2e/kWh. Renewable energy procurement would reduce this significantly." },
-  { id: "logistics", badge: "Logistics", badgeColor: "blue", title: "Sea freight, Vietnam to distribution center", co2: "421 kg CO₂e · 13% of total", note: "14,200 km sea freight is the primary driver. Nearshoring or consolidation can reduce this." },
+  { id: "materials", badge: "Materials", badgeColor: "green", title: "Raw material extraction and processing", co2: "1,976 kg CO₂e · 61% of total", note: "GOTS organic cotton cultivation in Madhya Pradesh + Lenzing™ EcoVero™ viscose are 41% lower carbon than conventional cotton, but cotton agriculture remains the dominant hotspot." },
+  { id: "manufacturing", badge: "Manufacturing", badgeColor: "amber", title: "Energy use at Tier 1 facility (Shahi Exports, Bengaluru)", co2: "648 kg CO₂e · 20% of total", note: "India South grid: 0.71 kgCO₂e/kWh. Renewable energy procurement would reduce this significantly." },
+  { id: "logistics", badge: "Logistics", badgeColor: "blue", title: "Sea freight, Mundra → Savannah, GA DC", co2: "421 kg CO₂e · 13% of total", note: "13,800 km sea freight is the primary driver. Nearshoring or consolidation can reduce this." },
 ];
 
 function Step4({ go }: { go: (s: Step) => void }) {
@@ -672,19 +681,19 @@ function Step4({ go }: { go: (s: Step) => void }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 28, flexWrap: "wrap", gap: 16 }}>
         <div>
           <Eyebrow>Footprint Breakdown</Eyebrow>
-          <h1 className="page-title">Recycled Tote Bag · <span className="tabular">3,240</span> kg CO₂e per unit</h1>
+          <h1 className="page-title">Little Planet™ Organic Sleep & Play (3-Pack) · <span className="tabular">3,240</span> kg CO₂e per 3-pack</h1>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <span className="chip chip-green">74% primary data</span>
           <span className="chip chip-gray">Cradle to gate</span>
-          <span className="chip chip-gray">Apparel & Textiles</span>
+          <span className="chip chip-gray">Babywear · Knit Sleepwear</span>
         </div>
       </div>
 
       {/* Stat cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 28 }}>
         {[
-          { label: "Total footprint", value: "3,240", caption: "kg CO₂e per unit" },
+          { label: "Total footprint", value: "3,240", caption: "kg CO₂e per 3-pack" },
           { label: "vs. industry avg", value: "-18%", caption: "Below category average", color: "var(--green-dark)" },
           { label: "Top hotspot", value: "Materials", caption: "accounts for 61%", small: true },
           { label: "Data accuracy", value: "74%", caption: "2 estimates in use" },
@@ -725,7 +734,7 @@ function Step4({ go }: { go: (s: Step) => void }) {
             </ResponsiveContainer>
           </div>
           <div style={{ marginTop: 12, fontSize: 12, color: "var(--text-tertiary)" }}>
-            Powered by US EPA USEEIO · PEFCR-aligned methodology · Functional unit: 1 unit (340g)
+            Powered by ecoinvent 3.10 + Higg MSI 3.7 · PEFCR-aligned methodology · Functional unit: 1 unit (340g)
           </div>
         </div>
 
@@ -769,15 +778,18 @@ type Play = {
   id: string; stage: "Materials" | "Manufacturing" | "Logistics";
   play: string; co2: number; cost: number; owner: string;
   effort: "Low" | "Med" | "High"; star?: boolean;
+  pillar?: "Sustainably Made" | "Safe for Kids" | "Tough for Play";
+  supplier?: string;
 };
 
 const PLAYS: Play[] = [
-  { id: "p1", stage: "Materials", play: "Switch to 70% recycled polyester content", co2: -487, cost: -0.22, owner: "Procurement", effort: "Low", star: true },
-  { id: "p2", stage: "Manufacturing", play: "Switch Tier 1 facility to renewable energy tariff", co2: -389, cost: 0.08, owner: "Operations", effort: "High" },
-  { id: "p3", stage: "Logistics", play: "Consolidate shipments — quarterly instead of monthly", co2: -210, cost: -0.14, owner: "Logistics", effort: "Med", star: true },
-  { id: "p4", stage: "Materials", play: "Replace virgin cotton with BCI-certified cotton", co2: -156, cost: -0.06, owner: "Procurement", effort: "Low" },
-  { id: "p5", stage: "Manufacturing", play: "ISO 14001 certification at Tier 1", co2: -98, cost: 0.12, owner: "Procurement", effort: "High" },
-  { id: "p6", stage: "Logistics", play: "Shift 20% of volume to air-to-sea intermodal", co2: -67, cost: -0.03, owner: "Logistics", effort: "Low" },
+  { id: "p1", stage: "Materials", play: "Move to 100% GOTS organic cotton (drop EcoVero™ blend)", co2: -487, cost: -0.22, owner: "Sourcing — Babywear", effort: "Low", star: true, pillar: "Sustainably Made", supplier: "Shahi Exports — Unit 8, Bengaluru, IN" },
+  { id: "p2", stage: "Manufacturing", play: "Solar PPA at Shahi Unit 8 (4.2 MW rooftop, BESCOM tariff)", co2: -389, cost: 0.08, owner: "Mfg Ops — India South", effort: "High", pillar: "Sustainably Made", supplier: "Shahi Exports + CleanMax Solar" },
+  { id: "p3", stage: "Logistics", play: "Consolidate Mundra → Savannah sailings to bi-weekly with Maersk", co2: -210, cost: -0.14, owner: "Global Logistics", effort: "Med", star: true, supplier: "Maersk Spot — MUN-SAV" },
+  { id: "p4", stage: "Materials", play: "Swap nickel-plated snaps → YKK SNAD nickel-free brass (Safe for Kids)", co2: -42, cost: 0.04, owner: "Design & PD", effort: "Low", pillar: "Safe for Kids", supplier: "YKK SNAD — Tirupur, IN" },
+  { id: "p5", stage: "Materials", play: "Add 30% REPREVE® recycled polyester to trim & label tape", co2: -156, cost: -0.06, owner: "Sourcing — Babywear", effort: "Low", pillar: "Sustainably Made", supplier: "Unifi Inc. — Yadkinville, NC" },
+  { id: "p6", stage: "Manufacturing", play: "Increase fabric GSM 180→195 for 60-wash durability (Tough for Play)", co2: 24, cost: 0.09, owner: "Design & PD", effort: "Med", pillar: "Tough for Play", supplier: "Arvind Limited — Naroda, IN" },
+  { id: "p7", stage: "Materials", play: "FSC-certified hangtags & polybag-free pack-out", co2: -28, cost: -0.02, owner: "Packaging", effort: "Low", pillar: "Sustainably Made", supplier: "Avery Dennison FSC™ C014119" },
 ];
 
 function Step5({ setLcaData, go, pushToast }: { setLcaData: (f: (d: LcaData) => LcaData) => void; go: (s: Step) => void; pushToast: (t: string, k?: Toast["kind"]) => void }) {
@@ -853,6 +865,9 @@ function Step5({ setLcaData, go, pushToast }: { setLcaData: (f: (d: LcaData) => 
             <div><span className={`chip ${stageChip(p.stage)}`}>{p.stage}</span></div>
             <div style={{ fontSize: 14 }}>
               {p.star && <I.star />} {p.play}
+              {p.supplier && <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 3 }}>
+                Supplier: {p.supplier}{p.pillar ? <> · <span style={{ color: "var(--green-dark)", fontWeight: 500 }}>{p.pillar}</span></> : null}
+              </div>}
               {p.star && <div style={{ fontSize: 11, color: "var(--green-dark)", marginTop: 2, fontWeight: 500 }}>Saves both carbon and money</div>}
             </div>
             <div><span className="chip chip-green tabular">{p.co2} kg</span></div>
@@ -894,20 +909,20 @@ function Step5({ setLcaData, go, pushToast }: { setLcaData: (f: (d: LcaData) => 
 // ─────────────────────────────────────────────────────────────────────
 
 const MATERIAL_OPTIONS = [
-  "100% recycled polyester (GRS certified)",
-  "100% organic cotton (GOTS certified)",
-  "70% recycled polyester + 30% organic cotton",
-  "Hemp / recycled cotton blend",
-  "Lyocell (TENCEL)",
+  "100% GOTS organic cotton — Shahi Exports (current Tier 1)",
+  "100% GOTS organic cotton — Arvind Limited fully vertical",
+  "70% GOTS cotton + 30% Lenzing™ EcoVero™ — Lenzing AG / Arvind",
+  "60% GOTS cotton + 40% REPREVE® rPET — Unifi Inc.",
+  "100% TENCEL™ Lyocell — Lenzing AG (premium Little Planet capsule)",
 ];
 
-// Pre-calculated scenarios — relative deltas vs baseline (3,240 kg, $2.14/u)
+// Pre-calculated scenarios — relative deltas vs baseline (3,240 g, $4.62/3-pack)
 const SCENARIOS: Record<string, { matBefore: number; matAfter: number; costAfter: number }> = {
-  "100% recycled polyester (GRS certified)":        { matBefore: 1976, matAfter: 1480, costAfter: 1.92 },
-  "100% organic cotton (GOTS certified)":           { matBefore: 1976, matAfter: 2210, costAfter: 2.48 },
-  "70% recycled polyester + 30% organic cotton":    { matBefore: 1976, matAfter: 1612, costAfter: 1.96 },
-  "Hemp / recycled cotton blend":                   { matBefore: 1976, matAfter: 1390, costAfter: 2.18 },
-  "Lyocell (TENCEL)":                               { matBefore: 1976, matAfter: 1550, costAfter: 2.34 },
+  "100% GOTS organic cotton — Shahi Exports (current Tier 1)":         { matBefore: 1976, matAfter: 1489, costAfter: 4.40 },
+  "100% GOTS organic cotton — Arvind Limited fully vertical":          { matBefore: 1976, matAfter: 1402, costAfter: 4.48 },
+  "70% GOTS cotton + 30% Lenzing™ EcoVero™ — Lenzing AG / Arvind":     { matBefore: 1976, matAfter: 1612, costAfter: 4.66 },
+  "60% GOTS cotton + 40% REPREVE® rPET — Unifi Inc.":                  { matBefore: 1976, matAfter: 1390, costAfter: 4.58 },
+  "100% TENCEL™ Lyocell — Lenzing AG (premium Little Planet capsule)": { matBefore: 1976, matAfter: 1550, costAfter: 4.94 },
 };
 
 function Step6({ setLcaData, go, pushToast }: { setLcaData: (f: (d: LcaData) => LcaData) => void; go: (s: Step) => void; pushToast: (t: string, k?: Toast["kind"]) => void }) {
@@ -933,7 +948,7 @@ function Step6({ setLcaData, go, pushToast }: { setLcaData: (f: (d: LcaData) => 
   const sc = SCENARIOS[material];
   const matDelta = sc.matAfter - sc.matBefore;
   const totalAfter = 3240 + matDelta;
-  const costBefore = 2.14;
+  const costBefore = 4.62;
   const costDelta = sc.costAfter - costBefore;
   const annualCo2 = Math.round(-matDelta * volume / 1000) * 1000;
   const annualCost = Math.round(-costDelta * volume);
@@ -978,7 +993,7 @@ function Step6({ setLcaData, go, pushToast }: { setLcaData: (f: (d: LcaData) => 
               <div style={{ marginBottom: 16 }}>
                 <div className="label" style={{ marginBottom: 8 }}>Current material</div>
                 <div style={{ padding: "12px 14px", background: "var(--gray-section)", borderRadius: 10, fontSize: 14 }}>
-                  Recycled polyester 60% + Organic cotton 40%
+                  60% GOTS organic cotton + 40% Lenzing™ EcoVero™ viscose
                 </div>
               </div>
               <div style={{ marginBottom: 16 }}>
@@ -1022,7 +1037,7 @@ function Step6({ setLcaData, go, pushToast }: { setLcaData: (f: (d: LcaData) => 
               {[
                 ["Material CO₂e", `${sc.matBefore.toLocaleString()} kg`, `${sc.matAfter.toLocaleString()} kg`, `${matDelta > 0 ? "+" : ""}${matDelta} kg`, matDelta < 0],
                 ["Total footprint", "3,240 kg", `${totalAfter.toLocaleString()} kg`, `${matDelta > 0 ? "+" : ""}${matDelta} kg`, matDelta < 0],
-                ["Material cost/unit", "$2.14", `$${sc.costAfter.toFixed(2)}`, `${costDelta > 0 ? "+" : ""}$${costDelta.toFixed(2)}`, costDelta < 0],
+                ["Material cost / 3-pack", "$4.62", `$${sc.costAfter.toFixed(2)}`, `${costDelta > 0 ? "+" : ""}$${costDelta.toFixed(2)}`, costDelta < 0],
                 ["Annual CO₂ reduction", "—", `${Math.abs(annualCo2).toLocaleString()} kg`, `at ${(volume/1000).toFixed(0)}k units`, true],
                 ["Annual cost saving", "—", `$${Math.abs(annualCost).toLocaleString()}`, `at ${(volume/1000).toFixed(0)}k units`, costDelta < 0],
               ].map(([metric, before, after, delta, good], i) => (
@@ -1059,7 +1074,7 @@ function Step6({ setLcaData, go, pushToast }: { setLcaData: (f: (d: LcaData) => 
               </div>
 
               <div style={{ marginTop: 16, padding: "10px 14px", background: "var(--amber-light)", border: "1px solid var(--amber-border)", borderRadius: 10, fontSize: 13 }}>
-                ⚠ GRS-certified recycled polyester required. 3 certified suppliers identified — see Suppliers tab in action queue.
+                ⚠ GOTS Scope Certificate + OEKO-TEX Std 100 Class I (infants) required. 3 qualified mills identified: Arvind Limited (IN), Pratibha Syntex (IN), Spectrum Knits (IN) — see Suppliers tab.
               </div>
 
               <button onClick={assignScenario} className="btn btn-primary" style={{ width: "100%", marginTop: 20, padding: 12 }}>
@@ -1084,46 +1099,52 @@ const ARTIFACTS = [
 ];
 
 const RFP_TEXT = `SUPPLIER REQUEST FOR PROPOSAL
-ImpactBridge · Sustainable Materials Sourcing
+Carter's, Inc. — Global Sourcing · Babywear
 Generated: June 15, 2026
-Prepared by: Alex Johnson, Sourcing Lead
+Prepared by: Alex Johnson, Sourcing Lead — Little Planet™
 
 PRODUCT REFERENCE
-Product: Recycled Tote Bag
-Current spec: Recycled polyester 60% + Organic cotton 40%
-Target spec: 70% GRS-certified recycled polyester + 30% organic cotton
-LCA reference: ImpactBridge LCA #RTB-2026-001
+Product: Little Planet™ Organic Sleep & Play (3-Pack), NB–9M
+SKU: LP-3PSP-NB · Style #225G731
+Current spec: 60% GOTS organic cotton + 40% Lenzing™ EcoVero™ viscose
+Target spec: 100% GOTS organic cotton, 195 GSM interlock, OEKO-TEX Std 100 Class I
+LCA reference: ImpactBridge LCA #LP-2026-3PSP-001
 
 BACKGROUND
-Our sustainability team has completed a lifecycle assessment for the Recycled Tote Bag product line. The assessment identified a material substitution opportunity that reduces Scope 3.1 emissions by 487 kg CO₂e per unit (24.6% reduction) while delivering a projected cost saving of $0.22/unit at current volume.
+Aligned to Carter's Raise the Future™ commitments — Sustainably Made, Safe for Kids, and Tough for Play — the sourcing team has completed a lifecycle assessment for the Little Planet™ Organic Sleep & Play (3-Pack). The assessment identifies a single-fiber simplification at our Tier 1 partner Shahi Exports (Unit 8, Bengaluru) that reduces Scope 3.1 emissions by 487 g CO₂e per 3-pack (15% vs. baseline) and lowers landed cost by $0.22 per 3-pack at run-rate volume.
 
-We are requesting proposals from GRS-certified recycled polyester suppliers to support a pilot for this transition.
+We are inviting GOTS Scope-Certified Tier 2 fabric mills to submit proposals for a 12,000-unit Fall '26 pilot.
 
-REQUIREMENTS
-· Minimum 70% post-consumer recycled polyester content
-· GRS (Global Recycled Standard) certification required — current certificate must be submitted with proposal
-· Material weight compatibility: 340g/unit finished product
-· MOQ: preference for <10,000 unit pilots
-· Target cost: at or below $1.96/unit material cost
-· Pilot timeline: first delivery within 12 weeks of PO
+REQUIREMENTS — RAISE THE FUTURE™ COMPLIANCE
+· Sustainably Made: 100% GOTS organic cotton, valid Scope Certificate (Control Union or Ecocert) through FY27
+· Safe for Kids: OEKO-TEX Standard 100 Class I (suitable for products in direct contact with infants <36 mo); ZDHC MRSL v3.1 Level 3 compliance; nickel-free trims
+· Tough for Play: Wash durability ≥ 50 cycles per Carter's Test Method CT-DUR-04 (no >5% pilling, no seam failure)
+· Color: Bluesign®-approved reactive dyes, GOTS-permitted auxiliary list only
+· Fabric: 195 GSM single jersey interlock, 100% combed ring-spun organic cotton
+
+COMMERCIAL
+· FOB India target: ≤ $4.40 / 3-pack at 50k units, ≤ $4.55 at 12k pilot
+· MOQ: 12,000 units (4,000 per size NB / 3M / 6M)
+· First delivery: Mundra port, week 38 / 2026
+· Payment: NET 60 against OBL, Carter's standard vendor terms
 
 SUSTAINABILITY CONTEXT
-This transition supports our 2026 Scope 3 reduction targets under CSRD reporting requirements. LCA data powered by US EPA USEEIO model, ISO 14044 aligned.
+This change supports Carter's 2030 Scope 3 reduction commitment and the Raise the Future™ goal to expand GOTS-certified organic cotton across the Little Planet™ assortment. LCA modeled in ImpactBridge using ecoinvent 3.10 + Higg MSI 3.7 (South Asia knit garment), PEFCR Apparel & Footwear methodology, ISO 14044 aligned.
 
-At 100,000 units/year, this change avoids 36,400 kg CO₂e annually — equivalent to removing 79 transatlantic flights from our carbon account.
+At 480,000 3-packs / year (Little Planet™ Sleep & Play run rate), this change avoids 234,000 kg CO₂e annually — roughly the footprint of 51 round-trip transatlantic flights.
 
 SUBMISSION
-Please respond to sourcing@company.com by June 29, 2026:
-  1. Pricing at 5k / 10k / 25k / 50k unit tiers
-  2. Current GRS certificate (must be valid through Dec 2026)
-  3. Lead time and sample availability
-  4. References from 2+ comparable brand customers
-  5. Fabric swatch if available
+Please respond to sourcing.babywear@carters.com by June 29, 2026:
+  1. Pricing at 12k / 25k / 50k / 100k tiers (FOB Mundra)
+  2. Current GOTS Scope Certificate + OEKO-TEX Std 100 Class I cert
+  3. ZDHC ClearStream report (latest cycle) and BSCI / SLCP audit
+  4. Sample yardage (3 yds/colorway) within 14 days
+  5. References from 2+ infant/toddler brand customers
 
-We are evaluating 3 qualified suppliers. Proposals received by the deadline will receive a response within 5 business days.`;
+Invited vendors: Arvind Limited (Naroda), Pratibha Syntex (Pithampur), Spectrum Knits (Tirupur). Proposals received by the deadline will receive a response within 5 business days.`;
 
 function Step7({ lcaData, setLcaData, go, pushToast }: { lcaData: LcaData; setLcaData: (f: (d: LcaData) => LcaData) => void; go: (s: Step) => void; pushToast: (t: string, k?: Toast["kind"]) => void }) {
-  const [recipient, setRecipient] = useState("Maria Chen, Head of Procurement");
+  const [recipient, setRecipient] = useState("Priya Raghavan, Director of Sourcing — Babywear");
   const [generating, setGenerating] = useState(false);
   const [generated, setGenerated] = useState(lcaData.artifactGenerated);
   const [copied, setCopied] = useState(false);
@@ -1160,9 +1181,9 @@ function Step7({ lcaData, setLcaData, go, pushToast }: { lcaData: LcaData; setLc
       </p>
 
       <div style={{ padding: 16, background: "var(--green-light)", border: "1px solid var(--green-border)", borderRadius: 12, marginBottom: 28 }}>
-        <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 6 }}>Selected play: Switch to 70% recycled polyester content</div>
+        <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 6 }}>Selected play: Move to 100% GOTS organic cotton with Shahi Exports</div>
         <div style={{ fontSize: 13, color: "var(--text-secondary)" }}>
-          CO₂ savings: -487 kg CO₂e/unit · Cost saving: -$0.22/unit · Effort: Low · Owner: Procurement
+          Pillar: Sustainably Made · CO₂: -487 g/3-pack · Cost: -$0.22/3-pack · Effort: Low · Owner: Sourcing — Babywear
         </div>
       </div>
 
@@ -1219,7 +1240,7 @@ function Step7({ lcaData, setLcaData, go, pushToast }: { lcaData: LcaData; setLc
           </div>
 
           <div style={{ marginTop: 14, fontSize: 13, color: "var(--text-secondary)" }}>
-            Artifact generated using Claude API · Emission data: US EPA USEEIO · Data stays in your environment
+            Artifact generated using Claude API · Emission data: ecoinvent 3.10 + Higg MSI 3.7 · Data stays in your environment
           </div>
         </div>
       )}
@@ -1248,19 +1269,19 @@ function Step7({ lcaData, setLcaData, go, pushToast }: { lcaData: LcaData; setLc
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div>
               <div className="label" style={{ marginBottom: 6 }}>To</div>
-              <input className="input" defaultValue="maria.chen@company.com" />
+              <input className="input" defaultValue="priya.raghavan@carters.com" />
             </div>
             <div>
               <div className="label" style={{ marginBottom: 6 }}>Subject</div>
-              <input className="input" defaultValue="Supplier RFP — Recycled Polyester (ImpactBridge)" />
+              <input className="input" defaultValue="Supplier RFP — 100% GOTS Organic Cotton, Little Planet™ Sleep & Play" />
             </div>
             <div>
               <div className="label" style={{ marginBottom: 6 }}>Body</div>
-              <textarea className="input" rows={4} defaultValue="Hi Maria, Please find attached..." />
+              <textarea className="input" rows={4} defaultValue="Hi Priya, Please find attached the RFP for the Little Planet™ 3-pack GOTS pilot..." />
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
               <button onClick={() => setEmailModalOpen(false)} className="btn btn-ghost">Cancel</button>
-              <button onClick={() => { setEmailModalOpen(false); pushToast("RFP sent to Maria Chen", "success"); }} className="btn btn-primary">Send</button>
+              <button onClick={() => { setEmailModalOpen(false); pushToast("RFP sent to Priya Raghavan", "success"); }} className="btn btn-primary">Send</button>
             </div>
           </div>
         </Modal>
@@ -1277,12 +1298,12 @@ function Dashboard({ go }: { go: (s: Step) => void }) {
   return (
     <div style={{ padding: 40 }}>
       <h1 className="page-title" style={{ marginBottom: 6 }}>Dashboard</h1>
-      <p className="body-text" style={{ marginBottom: 28 }}>Welcome back, Alex</p>
+      <p className="body-text" style={{ marginBottom: 28 }}>Welcome back, Alex — Sourcing Lead, Little Planet™</p>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 28 }}>
         {[
-          { l: "Active LCAs", v: "1", c: "Recycled Tote Bag in progress" },
-          { l: "Plays assigned", v: "1 of 6", c: "5 remaining" },
+          { l: "Active LCAs", v: "1", c: "Little Planet™ Organic Sleep & Play (3-Pack) in progress" },
+          { l: "Raise the Future™ plays assigned", v: "1 of 6", c: "5 remaining" },
           { l: "CO₂ identified", v: "1,407 kg", c: "reduction potential" },
           { l: "Cost identified", v: "$0.35/unit", c: "net saving potential" },
         ].map((s, i) => (
@@ -1313,7 +1334,7 @@ function Dashboard({ go }: { go: (s: Step) => void }) {
             display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr auto",
             padding: "16px 20px", alignItems: "center",
           }}>
-            <div style={{ fontWeight: 500 }}>Recycled Tote Bag</div>
+            <div style={{ fontWeight: 500 }}>Little Planet™ Organic Sleep & Play (3-Pack)</div>
             <div style={{ fontSize: 14, color: "var(--text-secondary)" }}>Step 5 of 7</div>
             <div style={{ fontSize: 14, color: "var(--text-secondary)" }} className="tabular">74%</div>
             <button onClick={() => go(5)} className="btn btn-primary btn-sm">Continue →</button>
@@ -1324,10 +1345,10 @@ function Dashboard({ go }: { go: (s: Step) => void }) {
           <div className="card-title" style={{ marginBottom: 16 }}>Recent activity</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             {[
-              ["RFP generated for recycled polyester play", "Just now"],
-              ["Scenario modeled: 70% recycled polyester", "2 min ago"],
+              ["RFP generated: 100% GOTS organic cotton pilot", "Just now"],
+              ["Scenario modeled: GOTS cotton + REPREVE® rPET trim", "2 min ago"],
               ["2 team responses received", "June 13"],
-              ["LCA started: Recycled Tote Bag", "June 13"],
+              ["LCA started: Little Planet™ Organic Sleep & Play (3-Pack)", "June 13"],
             ].map(([t, w], i) => (
               <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 14 }}>
                 <span>· {t}</span>
@@ -1346,28 +1367,30 @@ function Dashboard({ go }: { go: (s: Step) => void }) {
 // ─────────────────────────────────────────────────────────────────────
 
 const MODEL_PROCESSES = [
-  { id: "cotton", name: "Organic cotton cultivation", loc: "IN", db: "ecoinvent 3.10", co2: 412, kind: "background" },
-  { id: "rpet", name: "rPET flake, post-consumer", loc: "TR", db: "ecoinvent 3.10", co2: 689, kind: "background" },
-  { id: "yarn", name: "Yarn spinning, blended", loc: "VN", db: "Primary", co2: 184, kind: "foreground" },
-  { id: "weave", name: "Weaving & knitting", loc: "VN", db: "Primary", co2: 312, kind: "foreground" },
-  { id: "dye", name: "Reactive dyeing & finishing", loc: "VN", db: "ecoinvent 3.10", co2: 379, kind: "foreground" },
-  { id: "cutsew", name: "Cut, sew & assembly", loc: "VN", db: "Primary", co2: 156, kind: "foreground" },
-  { id: "pack", name: "Polybag & carton packaging", loc: "VN", db: "ecoinvent 3.10", co2: 48, kind: "foreground" },
-  { id: "freight", name: "Sea freight, HCMC → Rotterdam", loc: "—", db: "ecoinvent 3.10", co2: 421, kind: "background" },
-  { id: "tote", name: "Recycled tote bag (1 unit)", loc: "EU", db: "Reference product", co2: 3240, kind: "product" },
+  { id: "cotton", name: "GOTS organic cotton cultivation, Madhya Pradesh", loc: "IN", db: "ecoinvent 3.10", co2: 412, kind: "background" },
+  { id: "ecovero", name: "Lenzing™ EcoVero™ viscose fibre", loc: "AT", db: "Lenzing EPD", co2: 689, kind: "background" },
+  { id: "yarn", name: "Ring-spun yarn, Arvind Naroda", loc: "IN", db: "Primary (Arvind)", co2: 184, kind: "foreground" },
+  { id: "weave", name: "Single-jersey knitting, 195 GSM", loc: "IN", db: "Primary (Arvind)", co2: 312, kind: "foreground" },
+  { id: "dye", name: "Bluesign® reactive dye + finishing", loc: "IN", db: "Higg MSI 3.7", co2: 379, kind: "foreground" },
+  { id: "cutsew", name: "Cut, sew & snap assembly — Shahi Unit 8", loc: "IN", db: "Primary (Shahi)", co2: 156, kind: "foreground" },
+  { id: "pack", name: "FSC™ hangtag + recycled carton pack-out", loc: "IN", db: "ecoinvent 3.10", co2: 48, kind: "foreground" },
+  { id: "freight", name: "Sea freight, Mundra → Savannah, GA", loc: "—", db: "ecoinvent 3.10", co2: 421, kind: "background" },
+  { id: "tote", name: "Little Planet™ Sleep & Play 3-Pack (FU)", loc: "US", db: "Reference product", co2: 3240, kind: "product" },
 ];
 
 const TECHNO_FLOWS = [
-  { name: "Organic cotton fibre", category: "Materials / Natural fibres", qty: "0.180", unit: "kg", provider: "Organic cotton cultivation | IN", source: "Primary" },
-  { name: "rPET flake", category: "Materials / Recycled polymers", qty: "0.120", unit: "kg", provider: "rPET flake, post-consumer | TR", source: "Primary" },
-  { name: "Electricity, medium voltage", category: "Energy / Grid", qty: "1.420", unit: "kWh", provider: "Market for electricity | VN", source: "ecoinvent" },
-  { name: "Heat, natural gas", category: "Energy / Thermal", qty: "0.640", unit: "MJ", provider: "Steam production | VN", source: "ecoinvent" },
-  { name: "Water, deionised", category: "Process water", qty: "11.20", unit: "L", provider: "Tap water | VN", source: "ecoinvent" },
-  { name: "Reactive dye, mixed", category: "Chemicals / Dyes", qty: "0.014", unit: "kg", provider: "Dye production | RoW", source: "AI estimated" },
+  { name: "Organic cotton fibre (GOTS)", category: "Materials / Natural fibres", qty: "0.202", unit: "kg", provider: "GOTS cotton cultivation | IN-MP", source: "Primary" },
+  { name: "Lenzing™ EcoVero™ viscose", category: "Materials / Cellulosic", qty: "0.134", unit: "kg", provider: "EcoVero™ fibre | AT", source: "Lenzing EPD" },
+  { name: "Brass snap, nickel-free (YKK SNAD)", category: "Components / Trims", qty: "0.012", unit: "kg", provider: "Snap forming | IN-Tirupur", source: "Primary" },
+  { name: "Electricity, medium voltage", category: "Energy / Grid", qty: "1.420", unit: "kWh", provider: "Market for electricity | IN-South", source: "ecoinvent" },
+  { name: "Heat, natural gas (boiler)", category: "Energy / Thermal", qty: "0.640", unit: "MJ", provider: "Steam production | IN", source: "ecoinvent" },
+  { name: "Process water (RO)", category: "Process water", qty: "11.20", unit: "L", provider: "Tap water | IN", source: "ecoinvent" },
+  { name: "Reactive dye, Bluesign® bAsic", category: "Chemicals / Dyes", qty: "0.014", unit: "kg", provider: "Dye production | RoW", source: "AI estimated" },
   { name: "Sodium hydroxide, 50%", category: "Chemicals / Inorganic", qty: "0.022", unit: "kg", provider: "NaOH production | RER", source: "ecoinvent" },
-  { name: "LDPE polybag", category: "Packaging", qty: "0.008", unit: "kg", provider: "LDPE film | GLO", source: "ecoinvent" },
-  { name: "Corrugated board", category: "Packaging", qty: "0.045", unit: "kg", provider: "Corrugated board, recycled | EU", source: "ecoinvent" },
-  { name: "Transport, sea, container ship", category: "Logistics", qty: "14.20", unit: "tkm", provider: "Sea freight, transoceanic | GLO", source: "ecoinvent" },
+  { name: "FSC™ hangtag (recycled paper)", category: "Packaging", qty: "0.006", unit: "kg", provider: "FSC paper | EU", source: "ecoinvent" },
+  { name: "Corrugated carton, master pack", category: "Packaging", qty: "0.045", unit: "kg", provider: "Corrugated board, recycled | IN", source: "ecoinvent" },
+  { name: "Transport, sea, container ship", category: "Logistics", qty: "13.80", unit: "tkm", provider: "Sea freight, Mundra→Savannah | GLO", source: "ecoinvent" },
+  { name: "Transport, truck, drayage GA", category: "Logistics", qty: "0.420", unit: "tkm", provider: "Truck, EURO 5 equiv | US", source: "ecoinvent" },
 ];
 
 const ELEM_FLOWS = [
@@ -1453,7 +1476,7 @@ function StepModel({ go }: { go: (s: Step) => void }) {
           </p>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <span className="chip chip-gray">Functional unit · 1 tote bag</span>
+          <span className="chip chip-gray">Functional unit · 1 × 3-pack (336g)</span>
           <span className="chip chip-green">Allocation · mass</span>
           <span className="chip chip-blue">Method · IPCC 2021 GWP100</span>
         </div>
@@ -1483,7 +1506,7 @@ function StepModel({ go }: { go: (s: Step) => void }) {
         <div className="card" style={{ padding: 0, overflow: "hidden" }}>
           <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--border)", fontSize: 12, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--text-tertiary)" }}>Product system</div>
           <div style={{ padding: 8, fontSize: 13 }}>
-            <TreeNode label="Recycled Tote Bag" depth={0} bold />
+            <TreeNode label="Little Planet™ Organic Sleep & Play (3-Pack)" depth={0} bold />
             <TreeNode label="Foreground processes" depth={1} muted />
             {MODEL_PROCESSES.filter((p) => p.kind === "foreground").map((p) => (
               <TreeNode key={p.id} label={p.name} depth={2} active={selected === p.id} onClick={() => setSelected(p.id)} />
@@ -1515,18 +1538,18 @@ function StepModel({ go }: { go: (s: Step) => void }) {
               <rect width="880" height="460" fill="url(#grid)" />
 
               {/* arrows */}
-              <Arrow x1={194} y1={70} x2={330} y2={140} label="0.18 kg" />
-              <Arrow x1={194} y1={170} x2={330} y2={150} label="0.12 kg" />
+              <Arrow x1={194} y1={70} x2={330} y2={140} label="0.20 kg cotton" />
+              <Arrow x1={194} y1={170} x2={330} y2={150} label="0.13 kg EcoVero™" />
               <Arrow x1={514} y1={150} x2={650} y2={150} label="0.30 kg yarn" />
               <Arrow x1={514} y1={250} x2={650} y2={210} label="fabric" />
-              <Arrow x1={194} y1={280} x2={330} y2={250} label="grid VN" />
+              <Arrow x1={194} y1={280} x2={330} y2={250} label="IN-South grid" />
               <Arrow x1={834} y1={150} x2={834} y2={230} />
               <Arrow x1={834} y1={290} x2={834} y2={350} />
-              <Arrow x1={194} y1={370} x2={650} y2={370} label="14.2 tkm sea freight" />
+              <Arrow x1={194} y1={370} x2={650} y2={370} label="13.8 tkm Mundra→Savannah" />
 
               {/* nodes */}
               <Node id="cotton" x={10} y={40} />
-              <Node id="rpet" x={10} y={140} />
+              <Node id="ecovero" x={10} y={140} />
               <Node id="yarn" x={330} y={120} />
               <Node id="weave" x={330} y={220} />
               <Node id="dye" x={650} y={120} />
@@ -1725,18 +1748,19 @@ function FlowTable({ rows, cols }: { rows: FlowRow[]; cols: string[] }) {
 // ─────────────────────────────────────────────────────────────────────
 
 const PRM_FIELDS = [
-  { sf: "Account.Industry", maps: "Product category", val: "Apparel & Textiles", conf: "exact" },
-  { sf: "Product2.Family", maps: "Functional unit basis", val: "Recycled Tote Bag · 1 unit", conf: "exact" },
-  { sf: "Account.Supplier_Tier__c", maps: "Upstream boundary depth", val: "Tier 1 + Tier 2 (12 suppliers)", conf: "exact" },
-  { sf: "Opportunity.Manufacturing_Site__c", maps: "Operations facility", val: "Ho Chi Minh City, VN", conf: "exact" },
+  { sf: "Account.Brand__c", maps: "Carter's brand portfolio", val: "Little Planet™ (Carter's, Inc.)", conf: "exact" },
+  { sf: "Product2.Family", maps: "Functional unit basis", val: "Little Planet™ Organic Sleep & Play (3-Pack) · Style 225G731", conf: "exact" },
+  { sf: "Product2.Raise_The_Future_Pillar__c", maps: "Sustainability pillar tag", val: "Sustainably Made + Safe for Kids", conf: "exact" },
+  { sf: "Account.Vendor_Tier__c", maps: "Upstream boundary depth", val: "Tier 1 + Tier 2 (Shahi, Arvind, YKK, Lenzing, Unifi)", conf: "exact" },
+  { sf: "Opportunity.Manufacturing_Site__c", maps: "Operations facility", val: "Shahi Exports — Unit 8, Bengaluru, IN", conf: "exact" },
   { sf: "Contact.Department + Role", maps: "Data owner routing", val: "4 owners auto-identified", conf: "rule" },
 ];
 
 const PRM_OWNERS = [
-  { dept: "Procurement", icon: <I.box />, name: "Maria Chen", title: "Head of Procurement", sfRole: "Supplier Relationship Owner", queries: ["Account.Supplier__r where Tier ≤ 2", "Contract.Material_Spec__c"], why: "Owns 11 of 12 supplier contracts in scope" },
-  { dept: "Design & R&D", icon: <I.pencil />, name: "James Park", title: "Senior Product Designer", sfRole: "Product2 Owner", queries: ["Product2.Bill_of_Materials__c", "Product2.Weight_g__c"], why: "Listed as primary owner on Product2 record SKU-TB-018" },
-  { dept: "Operations", icon: <I.factory />, name: "Sarah Williams", title: "VP Operations", sfRole: "Site Lead — HCMC", queries: ["Manufacturing_Site__c where Region = APAC", "Energy_Log__c (last 90d)"], why: "Single VP role tied to the HCMC facility account" },
-  { dept: "Logistics", icon: <I.truck />, name: "David Kim", title: "Logistics Manager", sfRole: "Shipment Owner", queries: ["Shipment__c where Product2 = SKU-TB-018", "Carrier__r.Mode"], why: "Owns 100% of outbound shipments for this SKU YTD" },
+  { dept: "Sourcing — Babywear", icon: <I.box />, name: "Priya Raghavan", title: "Director, Sourcing — Babywear", sfRole: "Vendor Relationship Owner — Shahi Exports", queries: ["Account.Vendor__r where Tier ≤ 2 AND Brand = 'Little Planet'", "Contract.Fabric_Spec__c"], why: "Owns Shahi Exports MSA + 9 of 11 Tier-2 mill contracts for Little Planet™" },
+  { dept: "Design & PD", icon: <I.pencil />, name: "Megan O'Connell", title: "Senior Designer, Little Planet™", sfRole: "Product2 Owner — Style 225G731", queries: ["Product2.Bill_of_Materials__c", "Product2.GSM__c", "Product2.Wash_Durability_Cycles__c"], why: "Primary owner on Product2 record for Style 225G731 (Sleep & Play 3-Pack)" },
+  { dept: "Manufacturing Ops", icon: <I.factory />, name: "Rakesh Iyer", title: "Mfg Ops Lead, India South", sfRole: "Site Lead — Bengaluru", queries: ["Manufacturing_Site__c where Region = 'India South'", "Energy_Log__c (last 90d)", "ZDHC_ClearStream__c"], why: "Single ops lead tied to Shahi Unit 8 + Arvind Naroda accounts" },
+  { dept: "Global Logistics", icon: <I.truck />, name: "Daniel Reyes", title: "Sr. Manager, Global Logistics", sfRole: "Shipment Owner — IN→US lanes", queries: ["Shipment__c where Product2 = 'SKU-LP-3PSP-NB'", "Carrier__r.Mode", "Lane__c = 'MUN-SAV'"], why: "Owns 100% of Mundra→Savannah outbound shipments for this style YTD" },
 ];
 
 function StepPRM({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) => void; pushToast: (t: string, k?: Toast["kind"]) => void }) {
@@ -1770,7 +1794,7 @@ function StepPRM({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) =
           }}>SF</div>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontWeight: 500 }}>Salesforce — Acme Brands Production Org</span>
+              <span style={{ fontWeight: 500 }}>Salesforce — Carter's Inc. — Sourcing Production Org</span>
               {connected && <span className="chip chip-green"><span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--green-dark)" }} /> Connected</span>}
             </div>
             <div style={{ fontSize: 13, color: "var(--text-tertiary)", marginTop: 2 }}>
