@@ -110,12 +110,10 @@ function ImpactBridgeApp() {
           <span style={{ fontSize: 14, color: "var(--text-secondary)" }}>{lcaData.productName}</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
-          {stepNumber > 0 && (
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>Step {stepNumber} of 7</span>
-              <div style={{ width: 80, height: 3, background: "var(--border-solid)", borderRadius: 2, overflow: "hidden" }}>
-                <div style={{ width: `${(stepNumber / 7) * 100}%`, height: "100%", background: "var(--green-dark)", transition: "width 300ms ease" }} />
-              </div>
+          {currentStep !== "dashboard" && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--text-tertiary)" }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--green-mid)" }} />
+              All changes saved · 2 min ago
             </div>
           )}
           <div style={{
