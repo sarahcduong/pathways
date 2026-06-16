@@ -1904,37 +1904,58 @@ ORDER BY LastActivityDate DESC`}
       {/* Identified owners */}
       <div style={{ marginTop: 28 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
-          <h2 className="section-title">4 data owners identified</h2>
-          <span style={{ fontSize: 13, color: "var(--text-tertiary)" }}>Resolved from 1,284 contacts across 3 accounts</span>
+          <h2 className="section-title">{PRM_OWNERS.length} data owners identified</h2>
+          <span style={{ fontSize: 13, color: "var(--text-tertiary)" }}>
+            Resolved from 1,284 contacts across 11 accounts · 9 internal teams + 7 external partners
+          </span>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-          {PRM_OWNERS.map((o) => (
-            <div key={o.dept} className="card card-hover">
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <div style={{
-                    width: 38, height: 38, borderRadius: 10, background: "var(--green-light)",
-                    color: "var(--green-dark)", display: "flex", alignItems: "center", justifyContent: "center",
-                  }}>{o.icon}</div>
-                  <div>
-                    <div style={{ fontWeight: 500 }}>{o.name}</div>
-                    <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>{o.title} · {o.dept}</div>
+
+        {(["Internal · Carter's HQ", "External · DocuSign request"] as const).map((groupName) => {
+          const groupOwners = PRM_OWNERS.filter((o) => o.group === groupName);
+          const isExternal = groupName.startsWith("External");
+          return (
+            <div key={groupName} style={{ marginBottom: 22 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                <span className={isExternal ? "chip chip-blue" : "chip chip-green"} style={{ fontSize: 11 }}>
+                  {isExternal ? "External — DocuSign-style request" : "Internal — Carter's HQ"}
+                </span>
+                <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
+                  {groupOwners.length} {isExternal ? "partners" : "team members"} · {isExternal ? "primary data via signed request form" : "data pulled directly from internal systems"}
+                </span>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                {groupOwners.map((o) => (
+                  <div key={o.name} className="card card-hover">
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        <div style={{
+                          width: 38, height: 38, borderRadius: 10,
+                          background: isExternal ? "#EAF2FB" : "var(--green-light)",
+                          color: isExternal ? "#1E4FA3" : "var(--green-dark)",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                        }}>{o.icon}</div>
+                        <div>
+                          <div style={{ fontWeight: 500 }}>{o.name}</div>
+                          <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>{o.title} · {o.dept}</div>
+                        </div>
+                      </div>
+                      <span className={isExternal ? "chip chip-blue" : "chip chip-gray"} style={{ fontSize: 10 }}>{o.sfRole}</span>
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 10, fontStyle: "italic" }}>
+                      Why this person: {o.why}
+                    </div>
+                    <div style={{ borderTop: "1px solid var(--border)", paddingTop: 10 }}>
+                      <div className="label" style={{ marginBottom: 6 }}>Sourced from</div>
+                      {o.queries.map((q) => (
+                        <div key={q} className="mono" style={{ fontSize: 11, color: "var(--text-secondary)", padding: "2px 0" }}>· {q}</div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-                <span className="chip chip-blue" style={{ fontSize: 10 }}>SF · {o.sfRole}</span>
-              </div>
-              <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 10, fontStyle: "italic" }}>
-                Why this person: {o.why}
-              </div>
-              <div style={{ borderTop: "1px solid var(--border)", paddingTop: 10 }}>
-                <div className="label" style={{ marginBottom: 6 }}>Sourced from</div>
-                {o.queries.map((q) => (
-                  <div key={q} className="mono" style={{ fontSize: 11, color: "var(--text-secondary)", padding: "2px 0" }}>· {q}</div>
                 ))}
               </div>
             </div>
-          ))}
-        </div>
+          );
+        })}
       </div>
 
       <div style={{
@@ -1942,11 +1963,11 @@ ORDER BY LastActivityDate DESC`}
         border: "1px solid var(--green-border)", borderRadius: 12, fontSize: 14, lineHeight: 1.7,
       }}>
         <div style={{ fontWeight: 500, marginBottom: 6 }}>Next: Pathways will send each owner a focused request form covering only the data they own.</div>
-        <div style={{ color: "var(--text-secondary)" }}>Forms auto-prefill 38 fields from Salesforce ({lcaData.productName}, BOM, supplier list, site address). Owners only fill what we can't pull automatically.</div>
+        <div style={{ color: "var(--text-secondary)" }}>Forms auto-prefill 38 fields from Salesforce ({lcaData.productName}, BOM, supplier list, site address). Internal owners only fill what we can't pull automatically; external partners receive a DocuSign-style request scoped to their tier.</div>
       </div>
 
       <button onClick={() => go(2)} className="btn btn-primary" style={{ width: "100%", marginTop: 24, padding: 14 }}>
-        Send requests to 4 teams →
+        Send requests to {PRM_OWNERS.length} owners (9 internal + 7 external) →
       </button>
     </div>
   );
