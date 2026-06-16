@@ -1538,14 +1538,14 @@ function StepModel({ go }: { go: (s: Step) => void }) {
               <rect width="880" height="460" fill="url(#grid)" />
 
               {/* arrows */}
-              <Arrow x1={194} y1={70} x2={330} y2={140} label="0.18 kg" />
-              <Arrow x1={194} y1={170} x2={330} y2={150} label="0.12 kg" />
+              <Arrow x1={194} y1={70} x2={330} y2={140} label="0.20 kg cotton" />
+              <Arrow x1={194} y1={170} x2={330} y2={150} label="0.13 kg EcoVero™" />
               <Arrow x1={514} y1={150} x2={650} y2={150} label="0.30 kg yarn" />
               <Arrow x1={514} y1={250} x2={650} y2={210} label="fabric" />
-              <Arrow x1={194} y1={280} x2={330} y2={250} label="grid VN" />
+              <Arrow x1={194} y1={280} x2={330} y2={250} label="IN-South grid" />
               <Arrow x1={834} y1={150} x2={834} y2={230} />
               <Arrow x1={834} y1={290} x2={834} y2={350} />
-              <Arrow x1={194} y1={370} x2={650} y2={370} label="14.2 tkm sea freight" />
+              <Arrow x1={194} y1={370} x2={650} y2={370} label="13.8 tkm Mundra→Savannah" />
 
               {/* nodes */}
               <Node id="cotton" x={10} y={40} />
