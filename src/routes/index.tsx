@@ -637,7 +637,7 @@ function Step4({ go }: { go: (s: Step) => void }) {
 
   return (
     <div style={{ padding: 40 }}>
-      <BackBtn go={go} to={3} />
+      <BackBtn go={go} to={"model"} />
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 28, flexWrap: "wrap", gap: 16 }}>
         <div>
           <Eyebrow>Step 4 of 7 — Footprint Breakdown</Eyebrow>
