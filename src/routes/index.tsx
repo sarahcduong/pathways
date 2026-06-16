@@ -460,71 +460,95 @@ const REQUESTS: { id: string; icon: ReactNode; title: string; body: string; who:
 
 function Step2({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) => void; pushToast: (t: string, k?: Toast["kind"]) => void }) {
   const [modalOpen, setModalOpen] = useState(false);
-  const done = Object.values(lcaData.dataResponses).filter(Boolean).length;
+  const total = REQUESTS.length;
+  const done = REQUESTS.filter((r) => r.status === "done").length;
+  const pending = total - done;
+  const internalDone = REQUESTS.filter((r) => r.group === "internal" && r.status === "done").length;
+  const externalDone = REQUESTS.filter((r) => r.group === "external" && r.status === "done").length;
+  const internalTotal = REQUESTS.filter((r) => r.group === "internal").length;
+  const externalTotal = REQUESTS.filter((r) => r.group === "external").length;
 
   return (
     <div style={{ padding: 40 }}>
       <BackBtn go={go} to="prm" />
       <Eyebrow>Data Collection</Eyebrow>
-      <h1 className="page-title" style={{ marginBottom: 10 }}>Requests sent to 4 teams.</h1>
-      <p className="body-text" style={{ maxWidth: 720, marginBottom: 32 }}>
-        Pathways identified who owns each data point and sent them focused request forms. No spreadsheets. No email chains.
+      <h1 className="page-title" style={{ marginBottom: 10 }}>Requests sent to {total} owners.</h1>
+      <p className="body-text" style={{ maxWidth: 760, marginBottom: 32 }}>
+        Each of the {total} owners identified via Salesforce — {internalTotal} inside Carter's, {externalTotal} at vendor accounts — received a focused DocuSign-style request scoped to only the data they own. {done} have signed and submitted; {pending} are still outstanding.
       </p>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, maxWidth: 1100 }}>
-        {REQUESTS.map((r) => (
-          <div key={r.id} className="card card-hover">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ color: "var(--text-secondary)" }}>{r.icon}</div>
-                <div className="card-title">{r.title}</div>
-              </div>
-              {r.status === "done"
-                ? <span className="chip chip-green">Completed</span>
-                : <span className="chip chip-amber">Awaiting response</span>}
+      {(["internal", "external"] as const).map((g) => {
+        const items = REQUESTS.filter((r) => r.group === g);
+        const groupDone = items.filter((r) => r.status === "done").length;
+        const isInternal = g === "internal";
+        return (
+          <div key={g} style={{ marginBottom: 28 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, maxWidth: 1100 }}>
+              <span className={isInternal ? "chip chip-green" : "chip chip-blue"} style={{ fontSize: 11 }}>
+                {isInternal ? "Internal — Carter's HQ" : "External — vendor accounts"}
+              </span>
+              <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
+                {groupDone} of {items.length} responses received
+              </span>
             </div>
-            <div className="body-text" style={{ fontSize: 14, marginBottom: 16 }}>{r.body}</div>
-            <div style={{ fontSize: 12, color: "var(--text-tertiary)", display: "flex", flexDirection: "column", gap: 4 }}>
-              <div><span className="label" style={{ marginRight: 6 }}>Owner</span> {r.who}</div>
-              <div><span className="label" style={{ marginRight: 6 }}>Sent</span> {r.sent}</div>
-              <div><span className="label" style={{ marginRight: 6 }}>Received</span> {r.received}</div>
-            </div>
-            <div style={{ marginTop: 16, borderTop: "1px solid var(--border)", paddingTop: 14 }}>
-              {r.status === "done" ? (
-                <button onClick={() => r.id === "procurement" ? setModalOpen(true) : pushToast(`Opened ${r.title} response`, "info")}
-                  className="btn btn-outline btn-sm" style={{ color: "var(--green-dark)", borderColor: "var(--green-border)" }}>
-                  View response →
-                </button>
-              ) : (
-                <button onClick={() => pushToast(`Reminder sent to ${r.who.split(" · ")[0]}`, "info")}
-                  className="btn btn-outline btn-sm" style={{ color: "var(--amber)", borderColor: "var(--amber-border)" }}>
-                  Send reminder →
-                </button>
-              )}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, maxWidth: 1100 }}>
+              {items.map((r) => (
+                <div key={r.id} className="card card-hover">
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{ color: "var(--text-secondary)" }}>{r.icon}</div>
+                      <div className="card-title">{r.title}</div>
+                    </div>
+                    {r.status === "done"
+                      ? <span className="chip chip-green">Completed</span>
+                      : <span className="chip chip-amber">Awaiting response</span>}
+                  </div>
+                  <div className="body-text" style={{ fontSize: 14, marginBottom: 16 }}>{r.body}</div>
+                  <div style={{ fontSize: 12, color: "var(--text-tertiary)", display: "flex", flexDirection: "column", gap: 4 }}>
+                    <div><span className="label" style={{ marginRight: 6 }}>Owner</span> {r.who}</div>
+                    <div><span className="label" style={{ marginRight: 6 }}>Sent</span> {r.sent}</div>
+                    <div><span className="label" style={{ marginRight: 6 }}>Received</span> {r.received}</div>
+                  </div>
+                  <div style={{ marginTop: 16, borderTop: "1px solid var(--border)", paddingTop: 14 }}>
+                    {r.status === "done" ? (
+                      <button onClick={() => r.id === "sourcing" ? setModalOpen(true) : pushToast(`Opened ${r.title} response`, "info")}
+                        className="btn btn-outline btn-sm" style={{ color: "var(--green-dark)", borderColor: "var(--green-border)" }}>
+                        View response →
+                      </button>
+                    ) : (
+                      <button onClick={() => pushToast(`Reminder sent to ${r.who.split(" · ")[0]}`, "info")}
+                        className="btn btn-outline btn-sm" style={{ color: "var(--amber)", borderColor: "var(--amber-border)" }}>
+                        Send reminder →
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
-        ))}
-      </div>
+        );
+      })}
 
-      <div style={{ maxWidth: 1100, marginTop: 32 }}>
+      <div style={{ maxWidth: 1100, marginTop: 8 }}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-          <span style={{ fontSize: 14, fontWeight: 500 }}>{done} of 4 responses received</span>
-          <span style={{ fontSize: 13, color: "var(--text-tertiary)" }}>{Math.round((done / 4) * 100)}%</span>
+          <span style={{ fontSize: 14, fontWeight: 500 }}>{done} of {total} responses received · waiting on {pending}</span>
+          <span style={{ fontSize: 13, color: "var(--text-tertiary)" }}>{Math.round((done / total) * 100)}%</span>
         </div>
         <div style={{ height: 6, background: "var(--border-solid)", borderRadius: 4, overflow: "hidden" }}>
-          <div style={{ width: `${(done / 4) * 100}%`, height: "100%", background: "var(--green-dark)", transition: "width 400ms ease" }} />
+          <div style={{ width: `${(done / total) * 100}%`, height: "100%", background: "var(--green-dark)", transition: "width 400ms ease" }} />
         </div>
         <div style={{ marginTop: 10, fontSize: 13, color: "var(--text-secondary)" }}>
-          The platform will continue to the next step using available data. Missing inputs will be filled with ecoinvent 3.10 + Higg MSI 3.7 benchmarks.
+          Internal: {internalDone}/{internalTotal} · External: {externalDone}/{externalTotal}. Pathways will continue with available data — missing inputs are filled with ecoinvent 3.10 + Higg MSI 3.7 benchmarks and flagged in the audit trail.
         </div>
       </div>
 
       <div style={{ display: "flex", gap: 10, marginTop: 28 }}>
         <button onClick={() => go(3)} className="btn btn-primary">Continue with available data →</button>
-        <button onClick={() => pushToast("You can proceed now — missing data will be AI-filled in Step 3", "info")} className="btn btn-ghost">
+        <button onClick={() => pushToast(`Waiting on ${pending} owners — reminders queued for tomorrow 9am`, "info")} className="btn btn-ghost">
           Wait for all responses
         </button>
       </div>
+
 
       {modalOpen && (
         <Modal onClose={() => setModalOpen(false)} title="Sourcing Response — Priya Raghavan"
