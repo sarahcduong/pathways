@@ -1881,25 +1881,29 @@ function StepPRM({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) =
         <div className="card">
           <div className="card-title" style={{ marginBottom: 12 }}>Routing logic</div>
           <p className="body-text" style={{ fontSize: 13, marginBottom: 14 }}>
-            Each LCA data category is routed to the Salesforce contact whose role + account ownership best matches the request.
+            We resolve each BOM line + facility to a named contact via Account relationships and the <span className="mono">ReportsTo</span> hierarchy — never a shared inbox.
           </p>
           <div className="mono" style={{
             background: "var(--gray-section)", padding: 14, borderRadius: 10,
             fontSize: 12, lineHeight: 1.7, color: "var(--text-primary)",
           }}>
-{`SELECT Contact.Id, Contact.Email,
-       Contact.Department, Contact.Role
+{`SELECT Contact.Id, Contact.Name, Contact.Email,
+       Contact.Title, Contact.ReportsToId,
+       Account.Name, AccountContactRelation.Roles
 FROM   Contact
-WHERE  AccountId IN :scopedAccounts
-  AND  Role IN ('Procurement','Design',
-                'Operations','Logistics')
+WHERE  AccountId IN :scopedVendorAccounts
+   OR  (Account.Name = 'Carter\\'s, Inc.'
+        AND Department IN ('Sourcing','Procurement',
+              'Mfg Ops','Logistics','DC Ops'))
   AND  IsActive = TRUE
-ORDER BY LastActivityDate DESC`}
+  AND  Last_Verified_At__c > LAST_N_DAYS:90
+ORDER BY ReportsToId NULLS LAST`}
           </div>
           <div style={{ marginTop: 12, fontSize: 12, color: "var(--text-tertiary)" }}>
-            Query runs against your org. Pathways never writes back.
+            Read-only. Pathways pulls contacts + account graph; LCA data itself comes from each owner's signed upload.
           </div>
         </div>
+
       </div>
 
       {/* Identified owners */}
