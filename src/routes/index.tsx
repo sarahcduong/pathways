@@ -418,16 +418,6 @@ function Step1({ lcaData, setLcaData, go }: { lcaData: LcaData; setLcaData: (f: 
           </div>
         </div>
 
-        <div style={{
-          marginTop: 28, padding: 16, background: "var(--green-light)",
-          border: "1px solid var(--green-border)", borderRadius: 12, fontSize: 14, lineHeight: 1.7,
-        }}>
-          <div style={{ fontWeight: 500, marginBottom: 6 }}>Based on your inputs, Pathways will:</div>
-          <div>· Set your functional unit to 1 unit of {lcaData.productName}</div>
-          <div>· Apply {lcaData.boundary.replace(/-/g, " ")} system boundary</div>
-          <div>· Use ecoinvent 3.10 + Higg MSI 3.7 {lcaData.category} emission factors</div>
-          <div>· Send data requests to 16 owners (9 internal Carter's HQ + 7 external vendor contacts)</div>
-        </div>
 
         <button onClick={() => go("prm")} className="btn btn-primary" style={{ width: "100%", marginTop: 24, padding: "14px" }}>
           Connect PRM & start LCA →
@@ -685,10 +675,7 @@ function Step3({ go }: { go: (s: Step) => void }) {
           <div className="card">
             <div className="card-title" style={{ marginBottom: 10 }}>About AI-estimated inputs</div>
             <p className="body-text" style={{ fontSize: 14 }}>
-              When team data isn't available yet, Pathways fills gaps using the ecoinvent 3.10 + Higg MSI 3.7 model — the same dataset Fortune 500 companies use for Scope 3 disclosure. Benchmark values are conservative and based on industry averages for your product category and region.
-            </p>
-            <p className="body-text" style={{ fontSize: 14, marginTop: 10 }}>
-              As your team submits their responses, estimated fields are automatically replaced with primary data. Your LCA accuracy score improves over time.
+              Pathways fills gaps with ecoinvent 3.10 + Higg MSI 3.7 benchmarks. Estimated fields are replaced automatically as primary data comes in.
             </p>
           </div>
 
@@ -1896,67 +1883,6 @@ function StepPRM({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) =
         </div>
       </div>
 
-      {/* Field mapping */}
-      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 20 }}>
-        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-          <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div className="card-title">Field mapping</div>
-            <span className="chip chip-gray">{PRM_FIELDS.length} fields resolved</span>
-          </div>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-            <thead>
-              <tr style={{ background: "var(--gray-section)", color: "var(--text-tertiary)" }}>
-                <th style={{ textAlign: "left", padding: "10px 20px", fontSize: 11, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>Salesforce field</th>
-                <th style={{ textAlign: "left", padding: "10px 12px", fontSize: 11, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>Maps to</th>
-                <th style={{ textAlign: "left", padding: "10px 20px", fontSize: 11, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>Value</th>
-              </tr>
-            </thead>
-            <tbody>
-              {PRM_FIELDS.map((f) => (
-                <tr key={f.sf} style={{ borderTop: "1px solid var(--border)" }}>
-                  <td style={{ padding: "12px 20px" }}><span className="mono" style={{ color: "var(--text-primary)" }}>{f.sf}</span></td>
-                  <td style={{ padding: "12px 12px", color: "var(--text-secondary)" }}>{f.maps}</td>
-                  <td style={{ padding: "12px 20px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span>{f.val}</span>
-                      <span className={f.conf === "exact" ? "chip chip-green" : "chip chip-blue"} style={{ fontSize: 10 }}>
-                        {f.conf === "exact" ? "exact match" : "routing rule"}
-                      </span>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="card">
-          <div className="card-title" style={{ marginBottom: 12 }}>Routing logic</div>
-          <p className="body-text" style={{ fontSize: 13, marginBottom: 14 }}>
-            We resolve each BOM line + facility to a named contact via Account relationships and the <span className="mono">ReportsTo</span> hierarchy — never a shared inbox.
-          </p>
-          <div className="mono" style={{
-            background: "var(--gray-section)", padding: 14, borderRadius: 10,
-            fontSize: 12, lineHeight: 1.7, color: "var(--text-primary)",
-          }}>
-{`SELECT Contact.Id, Contact.Name, Contact.Email,
-       Contact.Title, Contact.ReportsToId,
-       Account.Name, AccountContactRelation.Roles
-FROM   Contact
-WHERE  AccountId IN :scopedVendorAccounts
-   OR  (Account.Name = 'Carter\\'s, Inc.'
-        AND Department IN ('Sourcing','Procurement',
-              'Mfg Ops','Logistics','DC Ops'))
-  AND  IsActive = TRUE
-  AND  Last_Verified_At__c > LAST_N_DAYS:90
-ORDER BY ReportsToId NULLS LAST`}
-          </div>
-          <div style={{ marginTop: 12, fontSize: 12, color: "var(--text-tertiary)" }}>
-            Read-only. Pathways pulls contacts + account graph; LCA data itself comes from each owner's signed upload.
-          </div>
-        </div>
-
-      </div>
 
       {/* Identified owners */}
       <div style={{ marginTop: 28 }}>
@@ -2016,13 +1942,6 @@ ORDER BY ReportsToId NULLS LAST`}
         })}
       </div>
 
-      <div style={{
-        marginTop: 28, padding: 16, background: "var(--green-light)",
-        border: "1px solid var(--green-border)", borderRadius: 12, fontSize: 14, lineHeight: 1.7,
-      }}>
-        <div style={{ fontWeight: 500, marginBottom: 6 }}>Next: every owner gets the same Pathways Data Request — focused on only the data they own.</div>
-        <div style={{ color: "var(--text-secondary)" }}>Pathways pre-fills each form with what Salesforce already knows about the recipient ({lcaData.productName}, their account, their BOM line / facility / lane). Internal owners (Sourcing, Mfg Ops, Logistics, DC) and external suppliers (Shahi, Arvind, Lenzing, YKK, Maersk, Schneider) all sign and submit through the same workflow — one audit trail, one inbox.</div>
-      </div>
 
 
       <button onClick={() => go(2)} className="btn btn-primary" style={{ width: "100%", marginTop: 24, padding: 14 }}>
