@@ -92,7 +92,7 @@ function PathwaysApp() {
     if (typeof window !== "undefined") window.scrollTo({ top: 0 });
   }
 
-  const showTabs = currentStep !== "dashboard" && currentStep !== "library";
+  const showTabs = currentStep !== "dashboard" && currentStep !== "library" && currentStep !== "supplier";
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
