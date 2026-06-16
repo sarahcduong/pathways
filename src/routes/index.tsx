@@ -1760,14 +1760,29 @@ const PRM_FIELDS = [
   { sf: "Product2.Raise_The_Future_Pillar__c", maps: "Sustainability pillar tag", val: "Sustainably Made + Safe for Kids", conf: "exact" },
   { sf: "Account.Vendor_Tier__c", maps: "Upstream boundary depth", val: "Tier 1 + Tier 2 (Shahi, Arvind, YKK, Lenzing, Unifi)", conf: "exact" },
   { sf: "Opportunity.Manufacturing_Site__c", maps: "Operations facility", val: "Shahi Exports — Unit 8, Bengaluru, IN", conf: "exact" },
-  { sf: "Contact.Department + Role", maps: "Data owner routing", val: "4 owners auto-identified", conf: "rule" },
+  { sf: "Contact.Department + Role", maps: "Data owner routing", val: "16 owners auto-identified across 9 internal teams + 7 external partners", conf: "rule" },
 ];
 
 const PRM_OWNERS = [
-  { dept: "Sourcing — Babywear", icon: <I.box />, name: "Priya Raghavan", title: "Director, Sourcing — Babywear", sfRole: "Vendor Relationship Owner — Shahi Exports", queries: ["Account.Vendor__r where Tier ≤ 2 AND Brand = 'Little Planet'", "Contract.Fabric_Spec__c"], why: "Owns Shahi Exports MSA + 9 of 11 Tier-2 mill contracts for Little Planet™" },
-  { dept: "Design & PD", icon: <I.pencil />, name: "Megan O'Connell", title: "Senior Designer, Little Planet™", sfRole: "Product2 Owner — Style 225G731", queries: ["Product2.Bill_of_Materials__c", "Product2.GSM__c", "Product2.Wash_Durability_Cycles__c"], why: "Primary owner on Product2 record for Style 225G731 (Sleep & Play 3-Pack)" },
-  { dept: "Manufacturing Ops", icon: <I.factory />, name: "Rakesh Iyer", title: "Mfg Ops Lead, India South", sfRole: "Site Lead — Bengaluru", queries: ["Manufacturing_Site__c where Region = 'India South'", "Energy_Log__c (last 90d)", "ZDHC_ClearStream__c"], why: "Single ops lead tied to Shahi Unit 8 + Arvind Naroda accounts" },
-  { dept: "Global Logistics", icon: <I.truck />, name: "Daniel Reyes", title: "Sr. Manager, Global Logistics", sfRole: "Shipment Owner — IN→US lanes", queries: ["Shipment__c where Product2 = 'SKU-LP-3PSP-NB'", "Carrier__r.Mode", "Lane__c = 'MUN-SAV'"], why: "Owns 100% of Mundra→Savannah outbound shipments for this style YTD" },
+  // ── Internal — Carter's HQ ──
+  { dept: "Product Management", icon: <I.box />, name: "Alex Johnson", title: "Sr. Product Manager, Little Planet™", sfRole: "Product2 Lead — Style 225G731", group: "Internal · Carter's HQ", queries: ["Product2.Bill_of_Materials__c", "Product2.Weight_g__c", "Product2.Compliance_Deadline__c", "Product2.Supplier_Contact_List__c"], why: "Primary PM on the SKU — owns BOM, product specs, weight/dimensions, and compliance timeline" },
+  { dept: "Design & PD", icon: <I.pencil />, name: "Megan O'Connell", title: "Senior Designer, Little Planet™", sfRole: "Material Composition Owner", group: "Internal · Carter's HQ", queries: ["Product2.Material_Composition__c", "Product2.GSM__c", "Product2.Wash_Durability_Cycles__c", "Product2.End_of_Life_Design__c"], why: "Owns material % composition, snap/trim selection, and end-of-life recyclability assumptions" },
+  { dept: "R&D / Engineering", icon: <I.pencil />, name: "Wei Zhang", title: "Textile R&D Engineer", sfRole: "Process Spec Owner", group: "Internal · Carter's HQ", queries: ["Process_Spec__c (knit, dye, finish)", "Packaging_Design__c", "Disassembly_Index__c"], why: "Defines manufacturing process specs (knitting, dyeing, finishing) and packaging design system" },
+  { dept: "Sourcing — Babywear", icon: <I.box />, name: "Priya Raghavan", title: "Director, Sourcing — Babywear", sfRole: "Vendor Relationship Owner — Shahi Exports", group: "Internal · Carter's HQ", queries: ["Account.Vendor__r where Tier ≤ 2", "Contract.Fabric_Spec__c", "Supplier_Location__c", "Inbound_Freight__c"], why: "Owns Shahi Exports MSA + 9 of 11 Tier-2 mill contracts; routes Tier-1/2 supplier requests" },
+  { dept: "Procurement — Trims", icon: <I.box />, name: "Hannah Park", title: "Procurement Manager, Trims & Packaging", sfRole: "PO Owner — YKK / Avery Dennison", group: "Internal · Carter's HQ", queries: ["PurchaseOrder__c where Category IN ('Trim','Packaging')", "Supplier_Packaging_Material__c"], why: "Owns inbound packaging materials and trim supplier routing (YKK SNAD, Avery Dennison FSC)" },
+  { dept: "Manufacturing Ops", icon: <I.factory />, name: "Rakesh Iyer", title: "Mfg Ops Lead, India South", sfRole: "Site Lead — Bengaluru", group: "Internal · Carter's HQ", queries: ["Manufacturing_Site__c where Region = 'India South'", "Energy_Log__c (last 90d)", "Water_Use__c", "Waste_Manifest__c", "ZDHC_ClearStream__c"], why: "Single ops lead tied to Shahi Unit 8 — owns electricity, gas, water, and on-site waste data" },
+  { dept: "Facilities — Bengaluru", icon: <I.factory />, name: "Anjali Krishnan", title: "Facilities Manager, Shahi Unit 8 (embed)", sfRole: "Equipment Efficiency Owner", group: "Internal · Carter's HQ", queries: ["Equipment_Efficiency__c", "Steam_Consumption__c", "Compressed_Air_kWh__c"], why: "Tracks per-line equipment efficiency and process utility consumption per production run" },
+  { dept: "Global Logistics", icon: <I.truck />, name: "Daniel Reyes", title: "Sr. Manager, Global Logistics", sfRole: "Shipment Owner — IN→US lanes", group: "Internal · Carter's HQ", queries: ["Shipment__c where Product2 = 'SKU-LP-3PSP-NB'", "Carrier__r.Mode", "Lane__c = 'MUN-SAV'"], why: "Owns Mundra→Savannah outbound shipments and inbound freight volumes for this style YTD" },
+  { dept: "Distribution — Braselton DC", icon: <I.truck />, name: "Marcus Lee", title: "DC Operations Manager, Braselton GA", sfRole: "Warehouse Energy Owner", group: "Internal · Carter's HQ", queries: ["Warehouse__c = 'Braselton'", "Warehouse_Energy_kWh__c", "Last_Mile_Carrier__c"], why: "Owns warehousing energy use and last-mile carrier mix from Braselton DC to retail / DTC" },
+
+  // ── External — Tier-1 / Tier-2 / 3PL (DocuSign-style requests) ──
+  { dept: "Tier 1 Supplier", icon: <I.box />, name: "Sunil Mehta", title: "Sustainability Lead — Shahi Exports", sfRole: "External — Vendor Contact", group: "External · DocuSign request", queries: ["Primary_Material_Production_Data__c", "Component_EPDs__c", "Packaging_Weight__c"], why: "Cut-and-sew partner for Style 225G731 — provides primary material data, component EPDs, and packaging weight" },
+  { dept: "Tier 2 Mill", icon: <I.box />, name: "Lakshmi Narayanan", title: "EHS Manager — Arvind Limited (Naroda)", sfRole: "External — Tier-2 Mill Contact", group: "External · DocuSign request", queries: ["GOTS_Certificate__c", "Dye_House_Energy__c", "Effluent_kg__c"], why: "Owns GOTS certificate, dye-house energy, and effluent data for the knit fabric supplied to Shahi" },
+  { dept: "Tier 2 Fiber", icon: <I.box />, name: "Klaus Berger", title: "Sustainability Manager — Lenzing AG", sfRole: "External — EcoVero™ Account", group: "External · DocuSign request", queries: ["EcoVero_LCA_Module__c", "Wood_Pulp_FSC_Chain__c"], why: "Provides EcoVero™ viscose LCA module + FSC chain-of-custody for the 5% blend" },
+  { dept: "Contract Manufacturer", icon: <I.factory />, name: "Aditi Sharma", title: "Plant Manager — Shahi Unit 8 Finishing", sfRole: "External — Toll Mfg Contact", group: "External · DocuSign request", queries: ["Energy_per_Unit_kWh__c", "Scrap_Rate_pct__c", "Coating_Process_Emissions__c"], why: "Runs finishing line — owns per-unit energy, scrap rate, and process-specific emissions (printing, coating)" },
+  { dept: "Trim Supplier", icon: <I.box />, name: "Tomoko Yamada", title: "Account Manager — YKK SNAD (Tirupur)", sfRole: "External — Trim Vendor", group: "External · DocuSign request", queries: ["Snap_Material_Spec__c", "Nickel_Free_Cert__c", "Component_Weight_g__c"], why: "Supplies nickel-free brass snaps — provides component spec, certificate, and weight per garment" },
+  { dept: "3PL — Ocean", icon: <I.truck />, name: "Henrik Sørensen", title: "Account Director — Maersk Spot", sfRole: "External — Carrier Contact", group: "External · DocuSign request", queries: ["Lane_Distance_nm__c", "Vessel_Fuel_Type__c", "TEU_Utilization_pct__c"], why: "Confirms Mundra→Savannah lane distance, fuel mix (VLSFO vs. bio-blend), and TEU utilization" },
+  { dept: "3PL — Inland US", icon: <I.truck />, name: "Carla Mendes", title: "Operations Lead — Schneider National", sfRole: "External — Drayage / Trucking", group: "External · DocuSign request", queries: ["Drayage_Distance_mi__c", "Diesel_Gal_per_Mile__c", "Mode_Mix_Rail_vs_Road__c"], why: "Owns Savannah port → Braselton DC drayage — provides fuel consumption and rail/road mode confirmations" },
 ];
 
 function StepPRM({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) => void; pushToast: (t: string, k?: Toast["kind"]) => void }) {
@@ -1778,7 +1793,7 @@ function StepPRM({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) =
 
   function resync() {
     setSyncing(true);
-    setTimeout(() => { setSyncing(false); setLastSync("just now"); pushToast("PRM resynced — 4 owners confirmed", "success"); }, 1100);
+    setTimeout(() => { setSyncing(false); setLastSync("just now"); pushToast("PRM resynced — 16 owners confirmed across internal + external partners", "success"); }, 1100);
   }
 
   return (
@@ -1889,37 +1904,58 @@ ORDER BY LastActivityDate DESC`}
       {/* Identified owners */}
       <div style={{ marginTop: 28 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
-          <h2 className="section-title">4 data owners identified</h2>
-          <span style={{ fontSize: 13, color: "var(--text-tertiary)" }}>Resolved from 1,284 contacts across 3 accounts</span>
+          <h2 className="section-title">{PRM_OWNERS.length} data owners identified</h2>
+          <span style={{ fontSize: 13, color: "var(--text-tertiary)" }}>
+            Resolved from 1,284 contacts across 11 accounts · 9 internal teams + 7 external partners
+          </span>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-          {PRM_OWNERS.map((o) => (
-            <div key={o.dept} className="card card-hover">
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <div style={{
-                    width: 38, height: 38, borderRadius: 10, background: "var(--green-light)",
-                    color: "var(--green-dark)", display: "flex", alignItems: "center", justifyContent: "center",
-                  }}>{o.icon}</div>
-                  <div>
-                    <div style={{ fontWeight: 500 }}>{o.name}</div>
-                    <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>{o.title} · {o.dept}</div>
+
+        {(["Internal · Carter's HQ", "External · DocuSign request"] as const).map((groupName) => {
+          const groupOwners = PRM_OWNERS.filter((o) => o.group === groupName);
+          const isExternal = groupName.startsWith("External");
+          return (
+            <div key={groupName} style={{ marginBottom: 22 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                <span className={isExternal ? "chip chip-blue" : "chip chip-green"} style={{ fontSize: 11 }}>
+                  {isExternal ? "External — DocuSign-style request" : "Internal — Carter's HQ"}
+                </span>
+                <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
+                  {groupOwners.length} {isExternal ? "partners" : "team members"} · {isExternal ? "primary data via signed request form" : "data pulled directly from internal systems"}
+                </span>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                {groupOwners.map((o) => (
+                  <div key={o.name} className="card card-hover">
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        <div style={{
+                          width: 38, height: 38, borderRadius: 10,
+                          background: isExternal ? "#EAF2FB" : "var(--green-light)",
+                          color: isExternal ? "#1E4FA3" : "var(--green-dark)",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                        }}>{o.icon}</div>
+                        <div>
+                          <div style={{ fontWeight: 500 }}>{o.name}</div>
+                          <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>{o.title} · {o.dept}</div>
+                        </div>
+                      </div>
+                      <span className={isExternal ? "chip chip-blue" : "chip chip-gray"} style={{ fontSize: 10 }}>{o.sfRole}</span>
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 10, fontStyle: "italic" }}>
+                      Why this person: {o.why}
+                    </div>
+                    <div style={{ borderTop: "1px solid var(--border)", paddingTop: 10 }}>
+                      <div className="label" style={{ marginBottom: 6 }}>Sourced from</div>
+                      {o.queries.map((q) => (
+                        <div key={q} className="mono" style={{ fontSize: 11, color: "var(--text-secondary)", padding: "2px 0" }}>· {q}</div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-                <span className="chip chip-blue" style={{ fontSize: 10 }}>SF · {o.sfRole}</span>
-              </div>
-              <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 10, fontStyle: "italic" }}>
-                Why this person: {o.why}
-              </div>
-              <div style={{ borderTop: "1px solid var(--border)", paddingTop: 10 }}>
-                <div className="label" style={{ marginBottom: 6 }}>Sourced from</div>
-                {o.queries.map((q) => (
-                  <div key={q} className="mono" style={{ fontSize: 11, color: "var(--text-secondary)", padding: "2px 0" }}>· {q}</div>
                 ))}
               </div>
             </div>
-          ))}
-        </div>
+          );
+        })}
       </div>
 
       <div style={{
@@ -1927,11 +1963,11 @@ ORDER BY LastActivityDate DESC`}
         border: "1px solid var(--green-border)", borderRadius: 12, fontSize: 14, lineHeight: 1.7,
       }}>
         <div style={{ fontWeight: 500, marginBottom: 6 }}>Next: Pathways will send each owner a focused request form covering only the data they own.</div>
-        <div style={{ color: "var(--text-secondary)" }}>Forms auto-prefill 38 fields from Salesforce ({lcaData.productName}, BOM, supplier list, site address). Owners only fill what we can't pull automatically.</div>
+        <div style={{ color: "var(--text-secondary)" }}>Forms auto-prefill 38 fields from Salesforce ({lcaData.productName}, BOM, supplier list, site address). Internal owners only fill what we can't pull automatically; external partners receive a DocuSign-style request scoped to their tier.</div>
       </div>
 
       <button onClick={() => go(2)} className="btn btn-primary" style={{ width: "100%", marginTop: 24, padding: 14 }}>
-        Send requests to 4 teams →
+        Send requests to {PRM_OWNERS.length} owners (9 internal + 7 external) →
       </button>
     </div>
   );
