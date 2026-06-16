@@ -299,7 +299,7 @@ function Step1({ lcaData, setLcaData, go }: { lcaData: LcaData; setLcaData: (f: 
 
   return (
     <div style={{ maxWidth: 640, margin: "0 auto", padding: "48px 24px" }}>
-      <StepDots current={1} />
+      
       <div className="card">
         <Eyebrow>Step 1 of 7 — LCA Intake</Eyebrow>
         <h1 className="page-title" style={{ marginBottom: 10 }}>Tell us about your product.</h1>
@@ -1442,7 +1442,7 @@ function StepModel({ go }: { go: (s: Step) => void }) {
   return (
     <div style={{ padding: 40 }}>
       <BackBtn go={go} to={3} />
-      <StepDots current={4} />
+      
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 8, flexWrap: "wrap", gap: 16 }}>
         <div>
@@ -1753,7 +1753,7 @@ function StepPRM({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) =
   return (
     <div style={{ padding: 40, maxWidth: 1180 }}>
       <BackBtn go={go} to={1} />
-      <StepDots current={1} />
+      
       <Eyebrow>Step 1.5 — PRM Integration</Eyebrow>
       <h1 className="page-title" style={{ marginBottom: 10 }}>How we knew who to ask.</h1>
       <p className="body-text" style={{ maxWidth: 720, marginBottom: 28 }}>
