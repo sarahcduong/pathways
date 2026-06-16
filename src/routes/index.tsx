@@ -1935,3 +1935,354 @@ ORDER BY LastActivityDate DESC`}
     </div>
   );
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// LIBRARY — Completed LCAs (track, rerun with updated data, version)
+// ─────────────────────────────────────────────────────────────────────
+
+type LcaRecord = {
+  id: string;
+  product: string;
+  sku: string;
+  status: "Completed" | "In progress" | "Needs refresh";
+  pillar: "Sustainably Made" | "Safe for Kids" | "Tough for Play";
+  footprint: number;     // g CO2e per unit
+  delta: number;         // % vs previous version
+  baseline: number;      // baseline footprint
+  accuracy: number;      // %
+  version: string;
+  versions: number;
+  lastRun: string;
+  nextDue: string;
+  owner: string;
+  staleness: "fresh" | "aging" | "stale";
+  trend: number[];
+  playsAssigned: number;
+  playsTotal: number;
+};
+
+const LCA_LIBRARY: LcaRecord[] = [
+  {
+    id: "lca-001", product: "Little Planet™ Organic Sleep & Play (3-Pack)", sku: "225G731 · LP-3PSP-NB",
+    status: "Completed", pillar: "Sustainably Made",
+    footprint: 3240, delta: -15.0, baseline: 3812, accuracy: 74,
+    version: "v1.3", versions: 3, lastRun: "Jun 15, 2026", nextDue: "Sep 15, 2026",
+    owner: "Alex Johnson", staleness: "fresh",
+    trend: [3812, 3640, 3420, 3380, 3290, 3240], playsAssigned: 1, playsTotal: 7,
+  },
+  {
+    id: "lca-002", product: "Carter's® 5-Pack Short-Sleeve Cotton Bodysuits", sku: "1H693410 · CT-BSS5-12M",
+    status: "Completed", pillar: "Tough for Play",
+    footprint: 4180, delta: -8.2, baseline: 4555, accuracy: 81,
+    version: "v2.0", versions: 5, lastRun: "May 28, 2026", nextDue: "Aug 28, 2026",
+    owner: "Priya Raghavan", staleness: "fresh",
+    trend: [4555, 4480, 4380, 4290, 4220, 4180], playsAssigned: 4, playsTotal: 6,
+  },
+  {
+    id: "lca-003", product: "OshKosh B'gosh® Vintage Denim Short — Toddler", sku: "3J451102 · OK-DSH-3T",
+    status: "Needs refresh", pillar: "Sustainably Made",
+    footprint: 5640, delta: 2.4, baseline: 5510, accuracy: 68,
+    version: "v1.1", versions: 2, lastRun: "Feb 10, 2026", nextDue: "Overdue · May 10",
+    owner: "Megan O'Connell", staleness: "stale",
+    trend: [5510, 5560, 5590, 5620, 5630, 5640], playsAssigned: 2, playsTotal: 5,
+  },
+  {
+    id: "lca-004", product: "Little Planet™ Organic Cotton Footed Pajama", sku: "115G642 · LP-FPJ-9M",
+    status: "Completed", pillar: "Safe for Kids",
+    footprint: 2960, delta: -22.4, baseline: 3815, accuracy: 86,
+    version: "v2.2", versions: 4, lastRun: "Jun 02, 2026", nextDue: "Sep 02, 2026",
+    owner: "Alex Johnson", staleness: "fresh",
+    trend: [3815, 3540, 3320, 3140, 3020, 2960], playsAssigned: 5, playsTotal: 5,
+  },
+  {
+    id: "lca-005", product: "Carter's® Heavyweight Sherpa Hooded Jacket", sku: "1L885221 · CT-SHJ-4T",
+    status: "Completed", pillar: "Tough for Play",
+    footprint: 9120, delta: -5.6, baseline: 9665, accuracy: 72,
+    version: "v1.2", versions: 2, lastRun: "Apr 22, 2026", nextDue: "Jul 22, 2026",
+    owner: "Daniel Reyes", staleness: "aging",
+    trend: [9665, 9540, 9410, 9290, 9180, 9120], playsAssigned: 2, playsTotal: 8,
+  },
+  {
+    id: "lca-006", product: "Little Planet™ Recycled Polyester Swim Trunk", sku: "335G119 · LP-SWM-5",
+    status: "In progress", pillar: "Sustainably Made",
+    footprint: 0, delta: 0, baseline: 2410, accuracy: 41,
+    version: "v0.4 (draft)", versions: 1, lastRun: "—", nextDue: "—",
+    owner: "Alex Johnson", staleness: "fresh",
+    trend: [], playsAssigned: 0, playsTotal: 0,
+  },
+];
+
+function Library({ go, pushToast }: { go: (s: Step) => void; pushToast: (t: string, k?: Toast["kind"]) => void }) {
+  const [filter, setFilter] = useState<"all" | "completed" | "stale" | "in-progress">("all");
+  const [pillarFilter, setPillarFilter] = useState<"all" | "Sustainably Made" | "Safe for Kids" | "Tough for Play">("all");
+  const [query, setQuery] = useState("");
+  const [openId, setOpenId] = useState<string | null>(null);
+
+  const filtered = LCA_LIBRARY.filter((r) => {
+    if (filter === "completed" && r.status !== "Completed") return false;
+    if (filter === "stale" && r.status !== "Needs refresh") return false;
+    if (filter === "in-progress" && r.status !== "In progress") return false;
+    if (pillarFilter !== "all" && r.pillar !== pillarFilter) return false;
+    if (query && !`${r.product} ${r.sku} ${r.owner}`.toLowerCase().includes(query.toLowerCase())) return false;
+    return true;
+  });
+
+  const open = openId ? LCA_LIBRARY.find((r) => r.id === openId) ?? null : null;
+
+  const completed = LCA_LIBRARY.filter((r) => r.status === "Completed").length;
+  const stale = LCA_LIBRARY.filter((r) => r.status === "Needs refresh").length;
+  const totalReduction = LCA_LIBRARY.reduce((s, r) => s + (r.baseline - r.footprint), 0);
+
+  function rerun(r: LcaRecord) {
+    pushToast(`Re-running ${r.product} with refreshed Tier-1/Tier-2 data — new version queued`, "info");
+    setOpenId(null);
+  }
+  function refreshData(r: LcaRecord) {
+    pushToast(`Re-pulling Salesforce vendor + ZDHC ClearStream data for ${r.sku}`, "info");
+  }
+
+  return (
+    <div style={{ padding: 40 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 24, flexWrap: "wrap", gap: 16 }}>
+        <div>
+          <Eyebrow>My LCAs</Eyebrow>
+          <h1 className="page-title" style={{ marginBottom: 6 }}>LCA library</h1>
+          <p className="body-text" style={{ maxWidth: 720 }}>
+            Every completed and in-flight assessment in one place. Re-run with updated supplier data, compare versions, and track progress against Carter's Raise the Future™ commitments.
+          </p>
+        </div>
+        <button onClick={() => go(1)} className="btn btn-primary">+ Start a new LCA</button>
+      </div>
+
+      {/* Stat strip */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
+        {[
+          { l: "Total LCAs", v: String(LCA_LIBRARY.length), c: `${completed} completed · ${stale} need refresh` },
+          { l: "Cumulative CO₂e identified", v: `${(totalReduction / 1000).toFixed(1)} kg`, c: "per unit, across all assessed styles" },
+          { l: "Avg. data accuracy", v: `${Math.round(LCA_LIBRARY.reduce((s, r) => s + r.accuracy, 0) / LCA_LIBRARY.length)}%`, c: "primary vs. AI-filled" },
+          { l: "Refresh due", v: String(stale), c: stale > 0 ? "Re-run with current vendor data" : "All LCAs current", color: stale > 0 ? "var(--amber-dark)" : undefined as any },
+        ].map((s, i) => (
+          <div key={i} className="card">
+            <div className="label" style={{ marginBottom: 12 }}>{s.l}</div>
+            <div className="num-medium" style={{ color: (s as any).color }}>{s.v}</div>
+            <div style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 4 }}>{s.c}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Filter row */}
+      <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
+        <input
+          className="input" placeholder="Search by product, SKU, or owner…" value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          style={{ flex: "1 1 280px", maxWidth: 360 }}
+        />
+        <div style={{ display: "flex", gap: 4, background: "var(--gray-section)", padding: 4, borderRadius: 10 }}>
+          {([
+            ["all", "All"], ["completed", "Completed"], ["stale", "Needs refresh"], ["in-progress", "In progress"],
+          ] as const).map(([k, l]) => (
+            <button key={k} onClick={() => setFilter(k)} style={{
+              padding: "6px 12px", borderRadius: 8, fontSize: 13, fontWeight: 500,
+              background: filter === k ? "white" : "transparent",
+              color: filter === k ? "var(--text-primary)" : "var(--text-secondary)",
+              boxShadow: filter === k ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+            }}>{l}</button>
+          ))}
+        </div>
+        <select className="input" value={pillarFilter} onChange={(e) => setPillarFilter(e.target.value as any)} style={{ width: "auto", padding: "8px 12px", fontSize: 13 }}>
+          <option value="all">All Raise the Future™ pillars</option>
+          <option>Sustainably Made</option>
+          <option>Safe for Kids</option>
+          <option>Tough for Play</option>
+        </select>
+        <span style={{ fontSize: 13, color: "var(--text-tertiary)", marginLeft: "auto" }}>
+          {filtered.length} of {LCA_LIBRARY.length} LCAs
+        </span>
+      </div>
+
+      {/* Table */}
+      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+        <div style={{
+          display: "grid", gridTemplateColumns: "2.2fr 130px 110px 130px 130px 130px 150px 140px",
+          padding: "12px 20px", borderBottom: "1px solid var(--border)", background: "var(--gray-section)",
+        }}>
+          {["Product", "Status", "Version", "g CO₂e / unit", "Δ vs. baseline", "Accuracy", "Last run / next due", ""].map((h, i) => (
+            <div key={i} className="label">{h}</div>
+          ))}
+        </div>
+        {filtered.map((r) => {
+          const isOpen = open?.id === r.id;
+          const statusChip =
+            r.status === "Completed" ? "chip chip-green"
+            : r.status === "Needs refresh" ? "chip chip-amber"
+            : "chip chip-gray";
+          const stalenessBar =
+            r.staleness === "fresh" ? "var(--green-dark)"
+            : r.staleness === "aging" ? "#D9A441"
+            : "#C44545";
+          return (
+            <div key={r.id} style={{ borderBottom: "1px solid var(--border)" }}>
+              <div
+                onClick={() => setOpenId(isOpen ? null : r.id)}
+                style={{
+                  display: "grid", gridTemplateColumns: "2.2fr 130px 110px 130px 130px 130px 150px 140px",
+                  padding: "16px 20px", alignItems: "center",
+                  borderLeft: `3px solid ${stalenessBar}`,
+                  background: isOpen ? "var(--gray-section)" : "transparent",
+                  cursor: "pointer", transition: "background 160ms ease",
+                }}
+              >
+                <div>
+                  <div style={{ fontWeight: 500, fontSize: 14 }}>{r.product}</div>
+                  <div style={{ fontSize: 12, color: "var(--text-tertiary)", marginTop: 2 }}>
+                    {r.sku} · <span style={{ color: "var(--green-dark)" }}>{r.pillar}</span> · Owner: {r.owner}
+                  </div>
+                </div>
+                <div><span className={statusChip}>{r.status}</span></div>
+                <div style={{ fontSize: 13, color: "var(--text-secondary)" }} className="tabular">{r.version}</div>
+                <div className="tabular" style={{ fontSize: 14, fontWeight: 500 }}>
+                  {r.footprint > 0 ? r.footprint.toLocaleString() : "—"}
+                </div>
+                <div>
+                  {r.status === "In progress" ? (
+                    <span style={{ fontSize: 13, color: "var(--text-tertiary)" }}>—</span>
+                  ) : (
+                    <span className={`chip ${r.delta < 0 ? "chip-green" : "chip-red"} tabular`}>
+                      {r.delta < 0 ? "▼ " : "▲ "}{Math.abs(r.delta).toFixed(1)}%
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: 13 }} className="tabular">{r.accuracy}%</div>
+                <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
+                  <div>{r.lastRun}</div>
+                  <div style={{ color: r.staleness === "stale" ? "#C44545" : "var(--text-tertiary)", marginTop: 2 }}>
+                    Due: {r.nextDue}
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); rerun(r); }}
+                    className="btn btn-sm"
+                    style={{
+                      background: r.staleness === "stale" ? "var(--green-dark)" : "white",
+                      color: r.staleness === "stale" ? "white" : "var(--text-primary)",
+                      border: "1px solid " + (r.staleness === "stale" ? "var(--green-dark)" : "var(--border-solid)"),
+                    }}
+                  >
+                    {r.status === "In progress" ? "Resume" : "Re-run ↻"}
+                  </button>
+                </div>
+              </div>
+
+              {isOpen && r.status !== "In progress" && (
+                <div className="fade-in" style={{ padding: "0 20px 24px 23px", background: "var(--gray-section)" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr", gap: 16, paddingTop: 16 }}>
+                    {/* Trend sparkline */}
+                    <div className="card" style={{ background: "white" }}>
+                      <div className="label" style={{ marginBottom: 10 }}>Footprint trend across versions</div>
+                      <div style={{ display: "flex", alignItems: "flex-end", gap: 8, height: 80, marginBottom: 10 }}>
+                        {r.trend.map((v, i) => {
+                          const max = Math.max(...r.trend);
+                          const min = Math.min(...r.trend);
+                          const h = ((v - min) / Math.max(1, max - min)) * 60 + 18;
+                          const isLast = i === r.trend.length - 1;
+                          return (
+                            <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                              <div style={{ fontSize: 10, color: "var(--text-tertiary)" }} className="tabular">{v.toLocaleString()}</div>
+                              <div style={{
+                                width: "100%", height: h, borderRadius: 4,
+                                background: isLast ? "var(--green-dark)" : "var(--green-light)",
+                                border: "1px solid " + (isLast ? "var(--green-dark)" : "var(--green-border)"),
+                              }} />
+                              <div style={{ fontSize: 10, color: "var(--text-tertiary)" }}>v{(i + 1) / 10 + 0.9 < 1 ? `0.${i + 1}` : `${i + 1}.0`.slice(0, 3)}</div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
+                        Baseline {r.baseline.toLocaleString()} g → current {r.footprint.toLocaleString()} g · {r.versions} versions on record
+                      </div>
+                    </div>
+
+                    {/* Plays + actions */}
+                    <div className="card" style={{ background: "white" }}>
+                      <div className="label" style={{ marginBottom: 10 }}>Action queue</div>
+                      <div style={{ fontSize: 22, fontWeight: 500 }} className="tabular">
+                        {r.playsAssigned}<span style={{ fontSize: 14, color: "var(--text-tertiary)" }}> / {r.playsTotal}</span>
+                      </div>
+                      <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 4, marginBottom: 12 }}>
+                        Plays assigned to sourcing, design & ops
+                      </div>
+                      <div style={{ height: 6, background: "var(--gray-section)", borderRadius: 3, overflow: "hidden" }}>
+                        <div style={{
+                          width: `${r.playsTotal ? (r.playsAssigned / r.playsTotal) * 100 : 0}%`,
+                          height: "100%", background: "var(--green-dark)",
+                        }} />
+                      </div>
+                    </div>
+
+                    {/* Refresh signals */}
+                    <div className="card" style={{ background: "white" }}>
+                      <div className="label" style={{ marginBottom: 10 }}>Refresh signals</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 12 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between" }}>
+                          <span style={{ color: "var(--text-secondary)" }}>Salesforce vendor data</span>
+                          <span className="chip chip-green" style={{ fontSize: 11 }}>Synced 2h ago</span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between" }}>
+                          <span style={{ color: "var(--text-secondary)" }}>ZDHC ClearStream</span>
+                          <span className={`chip ${r.staleness === "stale" ? "chip-amber" : "chip-green"}`} style={{ fontSize: 11 }}>
+                            {r.staleness === "stale" ? "New cycle available" : "Current"}
+                          </span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between" }}>
+                          <span style={{ color: "var(--text-secondary)" }}>Higg MSI release</span>
+                          <span className="chip chip-gray" style={{ fontSize: 11 }}>v3.7 (in use)</span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between" }}>
+                          <span style={{ color: "var(--text-secondary)" }}>FOB pricing (PO refresh)</span>
+                          <span className="chip chip-gray" style={{ fontSize: 11 }}>{r.lastRun}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {r.staleness === "stale" && (
+                    <div style={{
+                      marginTop: 14, padding: "12px 16px", background: "var(--amber-light)",
+                      border: "1px solid var(--amber-border)", borderRadius: 10, fontSize: 13,
+                      display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap",
+                    }}>
+                      <span>
+                        ⚠ This LCA is past its 90-day refresh cadence. Arvind switched mill location in Apr — re-run to capture the new energy mix.
+                      </span>
+                      <button onClick={() => rerun(r)} className="btn btn-primary btn-sm">Re-run with updated data →</button>
+                    </div>
+                  )}
+
+                  <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
+                    <button onClick={() => refreshData(r)} className="btn btn-outline btn-sm">Pull latest vendor data</button>
+                    <button onClick={() => go(4)} className="btn btn-outline btn-sm">View footprint</button>
+                    <button onClick={() => go(5)} className="btn btn-outline btn-sm">Open action queue</button>
+                    <button onClick={() => go(6)} className="btn btn-outline btn-sm">Model a scenario</button>
+                    <button onClick={() => pushToast(`Comparing ${r.version} vs prior version`, "info")} className="btn btn-ghost btn-sm">Compare versions</button>
+                    <button onClick={() => pushToast("Exporting LCA report (PDF + .xlsx)", "info")} className="btn btn-ghost btn-sm">Export report</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+        {filtered.length === 0 && (
+          <div style={{ padding: 40, textAlign: "center", color: "var(--text-tertiary)", fontSize: 14 }}>
+            No LCAs match these filters.
+          </div>
+        )}
+      </div>
+
+      <div style={{ marginTop: 16, fontSize: 12, color: "var(--text-tertiary)" }}>
+        LCAs auto-flag for refresh every 90 days, on Tier-1/Tier-2 vendor change in Salesforce, on a new ZDHC ClearStream cycle, or when a PO repricing event lands.
+      </div>
+    </div>
+  );
+}
