@@ -447,7 +447,7 @@ const REQUESTS: { id: string; icon: ReactNode; title: string; body: string; who:
   { id: "facilities",  group: "internal", icon: <I.factory />,title: "Facilities — Bengaluru",        body: "Per-line equipment efficiency, steam consumption, compressed-air kWh per run",                 who: "Anjali Krishnan · Facilities Manager, Shahi Unit 8 (embed)",sent: "June 13, 2026 at 9:04am", received: "—",                         status: "pending" },
   { id: "logistics",   group: "internal", icon: <I.truck />,  title: "Global Logistics",              body: "Mundra → Savannah lane, container utilization, inbound/outbound freight volumes YTD",          who: "Daniel Reyes · Sr. Manager, Global Logistics",             sent: "June 13, 2026 at 9:04am", received: "June 13, 2026 at 4:08pm",  status: "done"    },
   { id: "dcops",       group: "internal", icon: <I.truck />,  title: "Distribution — Braselton DC",   body: "Warehouse energy use, last-mile carrier mix from Braselton DC",                                who: "Marcus Lee · DC Operations Manager, Braselton GA",         sent: "June 13, 2026 at 9:04am", received: "—",                         status: "pending" },
-  // ── External — vendor contacts via DocuSign-style request (7) ──
+  // ── External — vendor contacts via Pathways Data Request (7) ──
   { id: "shahi",       group: "external", icon: <I.box />,    title: "Tier 1 — Shahi Exports",        body: "Primary material production data, component EPDs, packaging weight",                           who: "Sunil Mehta · Sustainability Lead — Shahi Exports",        sent: "June 13, 2026 at 9:05am", received: "June 14, 2026 at 6:12pm",  status: "done"    },
   { id: "arvind",      group: "external", icon: <I.box />,    title: "Tier 2 Mill — Arvind Limited",  body: "GOTS certificate, dye-house energy, effluent (kg) for the knit fabric",                       who: "Lakshmi Narayanan · EHS Manager — Arvind (Naroda)",        sent: "June 13, 2026 at 9:05am", received: "June 15, 2026 at 9:30am",  status: "done"    },
   { id: "lenzing",     group: "external", icon: <I.box />,    title: "Tier 2 Fiber — Lenzing AG",     body: "EcoVero™ LCA module + FSC chain-of-custody for the 5% viscose blend",                          who: "Klaus Berger · Sustainability Manager — Lenzing AG",       sent: "June 13, 2026 at 9:05am", received: "June 14, 2026 at 1:48pm",  status: "done"    },
@@ -474,7 +474,7 @@ function Step2({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) => 
       <Eyebrow>Data Collection</Eyebrow>
       <h1 className="page-title" style={{ marginBottom: 10 }}>Requests sent to {total} owners.</h1>
       <p className="body-text" style={{ maxWidth: 760, marginBottom: 32 }}>
-        Each of the {total} owners identified via Salesforce — {internalTotal} inside Carter's, {externalTotal} at vendor accounts — received a focused DocuSign-style request scoped to only the data they own. {done} have signed and submitted; {pending} are still outstanding.
+        Each of the {total} owners identified via Salesforce — {internalTotal} inside Carter's, {externalTotal} at vendor accounts — received a focused Pathways Data Request scoped to only the data they own. {done} have signed and submitted; {pending} are still outstanding.
       </p>
 
       {(["internal", "external"] as const).map((g) => {
@@ -1815,14 +1815,14 @@ const PRM_OWNERS = [
   { dept: "Global Logistics", icon: <I.truck />, name: "Daniel Reyes", title: "Sr. Manager, Global Logistics", sfRole: "Shipment Owner — IN→US lanes", group: "Internal · Carter's HQ", queries: ["Shipment__c where Product2 = 'SKU-LP-3PSP-NB'", "Carrier__r.Mode", "Lane__c = 'MUN-SAV'"], why: "Owns Mundra→Savannah outbound shipments and inbound freight volumes for this style YTD" },
   { dept: "Distribution — Braselton DC", icon: <I.truck />, name: "Marcus Lee", title: "DC Operations Manager, Braselton GA", sfRole: "Warehouse Energy Owner", group: "Internal · Carter's HQ", queries: ["Warehouse__c = 'Braselton'", "Warehouse_Energy_kWh__c", "Last_Mile_Carrier__c"], why: "Owns warehousing energy use and last-mile carrier mix from Braselton DC to retail / DTC" },
 
-  // ── External — Tier-1 / Tier-2 / 3PL (DocuSign-style requests) ──
-  { dept: "Tier 1 Supplier", icon: <I.box />, name: "Sunil Mehta", title: "Sustainability Lead — Shahi Exports", sfRole: "External — Vendor Contact", group: "External · DocuSign request", queries: ["Primary_Material_Production_Data__c", "Component_EPDs__c", "Packaging_Weight__c"], why: "Cut-and-sew partner for Style 225G731 — provides primary material data, component EPDs, and packaging weight" },
-  { dept: "Tier 2 Mill", icon: <I.box />, name: "Lakshmi Narayanan", title: "EHS Manager — Arvind Limited (Naroda)", sfRole: "External — Tier-2 Mill Contact", group: "External · DocuSign request", queries: ["GOTS_Certificate__c", "Dye_House_Energy__c", "Effluent_kg__c"], why: "Owns GOTS certificate, dye-house energy, and effluent data for the knit fabric supplied to Shahi" },
-  { dept: "Tier 2 Fiber", icon: <I.box />, name: "Klaus Berger", title: "Sustainability Manager — Lenzing AG", sfRole: "External — EcoVero™ Account", group: "External · DocuSign request", queries: ["EcoVero_LCA_Module__c", "Wood_Pulp_FSC_Chain__c"], why: "Provides EcoVero™ viscose LCA module + FSC chain-of-custody for the 5% blend" },
-  { dept: "Contract Manufacturer", icon: <I.factory />, name: "Aditi Sharma", title: "Plant Manager — Shahi Unit 8 Finishing", sfRole: "External — Toll Mfg Contact", group: "External · DocuSign request", queries: ["Energy_per_Unit_kWh__c", "Scrap_Rate_pct__c", "Coating_Process_Emissions__c"], why: "Runs finishing line — owns per-unit energy, scrap rate, and process-specific emissions (printing, coating)" },
-  { dept: "Trim Supplier", icon: <I.box />, name: "Tomoko Yamada", title: "Account Manager — YKK SNAD (Tirupur)", sfRole: "External — Trim Vendor", group: "External · DocuSign request", queries: ["Snap_Material_Spec__c", "Nickel_Free_Cert__c", "Component_Weight_g__c"], why: "Supplies nickel-free brass snaps — provides component spec, certificate, and weight per garment" },
-  { dept: "3PL — Ocean", icon: <I.truck />, name: "Henrik Sørensen", title: "Account Director — Maersk Spot", sfRole: "External — Carrier Contact", group: "External · DocuSign request", queries: ["Lane_Distance_nm__c", "Vessel_Fuel_Type__c", "TEU_Utilization_pct__c"], why: "Confirms Mundra→Savannah lane distance, fuel mix (VLSFO vs. bio-blend), and TEU utilization" },
-  { dept: "3PL — Inland US", icon: <I.truck />, name: "Carla Mendes", title: "Operations Lead — Schneider National", sfRole: "External — Drayage / Trucking", group: "External · DocuSign request", queries: ["Drayage_Distance_mi__c", "Diesel_Gal_per_Mile__c", "Mode_Mix_Rail_vs_Road__c"], why: "Owns Savannah port → Braselton DC drayage — provides fuel consumption and rail/road mode confirmations" },
+  // ── External — Tier-1 / Tier-2 / 3PL (Pathways Data Requests) ──
+  { dept: "Tier 1 Supplier", icon: <I.box />, name: "Sunil Mehta", title: "Sustainability Lead — Shahi Exports", sfRole: "External — Vendor Contact", group: "External · Data Request", queries: ["Primary_Material_Production_Data__c", "Component_EPDs__c", "Packaging_Weight__c"], why: "Cut-and-sew partner for Style 225G731 — provides primary material data, component EPDs, and packaging weight" },
+  { dept: "Tier 2 Mill", icon: <I.box />, name: "Lakshmi Narayanan", title: "EHS Manager — Arvind Limited (Naroda)", sfRole: "External — Tier-2 Mill Contact", group: "External · Data Request", queries: ["GOTS_Certificate__c", "Dye_House_Energy__c", "Effluent_kg__c"], why: "Owns GOTS certificate, dye-house energy, and effluent data for the knit fabric supplied to Shahi" },
+  { dept: "Tier 2 Fiber", icon: <I.box />, name: "Klaus Berger", title: "Sustainability Manager — Lenzing AG", sfRole: "External — EcoVero™ Account", group: "External · Data Request", queries: ["EcoVero_LCA_Module__c", "Wood_Pulp_FSC_Chain__c"], why: "Provides EcoVero™ viscose LCA module + FSC chain-of-custody for the 5% blend" },
+  { dept: "Contract Manufacturer", icon: <I.factory />, name: "Aditi Sharma", title: "Plant Manager — Shahi Unit 8 Finishing", sfRole: "External — Toll Mfg Contact", group: "External · Data Request", queries: ["Energy_per_Unit_kWh__c", "Scrap_Rate_pct__c", "Coating_Process_Emissions__c"], why: "Runs finishing line — owns per-unit energy, scrap rate, and process-specific emissions (printing, coating)" },
+  { dept: "Trim Supplier", icon: <I.box />, name: "Tomoko Yamada", title: "Account Manager — YKK SNAD (Tirupur)", sfRole: "External — Trim Vendor", group: "External · Data Request", queries: ["Snap_Material_Spec__c", "Nickel_Free_Cert__c", "Component_Weight_g__c"], why: "Supplies nickel-free brass snaps — provides component spec, certificate, and weight per garment" },
+  { dept: "3PL — Ocean", icon: <I.truck />, name: "Henrik Sørensen", title: "Account Director — Maersk Spot", sfRole: "External — Carrier Contact", group: "External · Data Request", queries: ["Lane_Distance_nm__c", "Vessel_Fuel_Type__c", "TEU_Utilization_pct__c"], why: "Confirms Mundra→Savannah lane distance, fuel mix (VLSFO vs. bio-blend), and TEU utilization" },
+  { dept: "3PL — Inland US", icon: <I.truck />, name: "Carla Mendes", title: "Operations Lead — Schneider National", sfRole: "External — Drayage / Trucking", group: "External · Data Request", queries: ["Drayage_Distance_mi__c", "Diesel_Gal_per_Mile__c", "Mode_Mix_Rail_vs_Road__c"], why: "Owns Savannah port → Braselton DC drayage — provides fuel consumption and rail/road mode confirmations" },
 ];
 
 function StepPRM({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) => void; pushToast: (t: string, k?: Toast["kind"]) => void }) {
@@ -1843,7 +1843,7 @@ function StepPRM({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) =
       <Eyebrow>PRM Integration</Eyebrow>
       <h1 className="page-title" style={{ marginBottom: 10 }}>How we knew who to ask.</h1>
       <p className="body-text" style={{ maxWidth: 760, marginBottom: 28 }}>
-        Salesforce is Pathways' source of <em>people</em> — supplier contacts, internal team members, account relationships, and org hierarchy. We use it to find the right named owner at each vendor and inside Carter's (not a generic <span className="mono">sustainability@…</span> alias). Every owner — internal and external — then receives the same DocuSign-style request form to upload the data they own.
+        Salesforce is Pathways' source of <em>people</em> — supplier contacts, internal team members, account relationships, and org hierarchy. We use it to find the right named owner at each vendor and inside Carter's (not a generic <span className="mono">sustainability@…</span> alias). Every owner — internal and external — then receives the same Pathways Data Request form to upload the data they own.
       </p>
 
 
@@ -1955,14 +1955,14 @@ ORDER BY ReportsToId NULLS LAST`}
           </span>
         </div>
 
-        {(["Internal · Carter's HQ", "External · DocuSign request"] as const).map((groupName) => {
+        {(["Internal · Carter's HQ", "External · Data Request"] as const).map((groupName) => {
           const groupOwners = PRM_OWNERS.filter((o) => o.group === groupName);
           const isExternal = groupName.startsWith("External");
           return (
             <div key={groupName} style={{ marginBottom: 22 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
                 <span className={isExternal ? "chip chip-blue" : "chip chip-green"} style={{ fontSize: 11 }}>
-                  {isExternal ? "External vendors — DocuSign-style request" : "Internal Carter's HQ — DocuSign-style request"}
+                  {isExternal ? "External vendors — Pathways Data Request" : "Internal Carter's HQ — Pathways Data Request"}
                 </span>
                 <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
                   {groupOwners.length} {isExternal ? "supplier contacts" : "team members"} · each receives a focused upload form scoped to the data they own
@@ -2008,7 +2008,7 @@ ORDER BY ReportsToId NULLS LAST`}
         marginTop: 28, padding: 16, background: "var(--green-light)",
         border: "1px solid var(--green-border)", borderRadius: 12, fontSize: 14, lineHeight: 1.7,
       }}>
-        <div style={{ fontWeight: 500, marginBottom: 6 }}>Next: every owner gets the same DocuSign-style request — focused on only the data they own.</div>
+        <div style={{ fontWeight: 500, marginBottom: 6 }}>Next: every owner gets the same Pathways Data Request — focused on only the data they own.</div>
         <div style={{ color: "var(--text-secondary)" }}>Pathways pre-fills each form with what Salesforce already knows about the recipient ({lcaData.productName}, their account, their BOM line / facility / lane). Internal owners (Sourcing, Mfg Ops, Logistics, DC) and external suppliers (Shahi, Arvind, Lenzing, YKK, Maersk, Schneider) all sign and submit through the same workflow — one audit trail, one inbox.</div>
       </div>
 
