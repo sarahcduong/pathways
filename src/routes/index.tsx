@@ -169,6 +169,7 @@ function ImpactBridgeApp() {
           {currentStep === 1 && <Step1 lcaData={lcaData} setLcaData={setLcaData} go={go} />}
           {currentStep === 2 && <Step2 lcaData={lcaData} go={go} pushToast={pushToast} />}
           {currentStep === 3 && <Step3 go={go} />}
+          {currentStep === "model" && <StepModel go={go} />}
           {currentStep === 4 && <Step4 go={go} />}
           {currentStep === 5 && <Step5 setLcaData={setLcaData} go={go} pushToast={pushToast} />}
           {currentStep === 6 && <Step6 setLcaData={setLcaData} go={go} pushToast={pushToast} />}
