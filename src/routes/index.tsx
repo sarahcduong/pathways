@@ -1309,3 +1309,382 @@ function Dashboard({ go }: { go: (s: Step) => void }) {
     </div>
   );
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// STEP 3.5 — LCA MODEL (process network, inventory, flows)
+// ─────────────────────────────────────────────────────────────────────
+
+const MODEL_PROCESSES = [
+  { id: "cotton", name: "Organic cotton cultivation", loc: "IN", db: "ecoinvent 3.10", co2: 412, kind: "background" },
+  { id: "rpet", name: "rPET flake, post-consumer", loc: "TR", db: "ecoinvent 3.10", co2: 689, kind: "background" },
+  { id: "yarn", name: "Yarn spinning, blended", loc: "VN", db: "Primary", co2: 184, kind: "foreground" },
+  { id: "weave", name: "Weaving & knitting", loc: "VN", db: "Primary", co2: 312, kind: "foreground" },
+  { id: "dye", name: "Reactive dyeing & finishing", loc: "VN", db: "ecoinvent 3.10", co2: 379, kind: "foreground" },
+  { id: "cutsew", name: "Cut, sew & assembly", loc: "VN", db: "Primary", co2: 156, kind: "foreground" },
+  { id: "pack", name: "Polybag & carton packaging", loc: "VN", db: "ecoinvent 3.10", co2: 48, kind: "foreground" },
+  { id: "freight", name: "Sea freight, HCMC → Rotterdam", loc: "—", db: "ecoinvent 3.10", co2: 421, kind: "background" },
+  { id: "tote", name: "Recycled tote bag (1 unit)", loc: "EU", db: "Reference product", co2: 3240, kind: "product" },
+];
+
+const TECHNO_FLOWS = [
+  { name: "Organic cotton fibre", category: "Materials / Natural fibres", qty: "0.180", unit: "kg", provider: "Organic cotton cultivation | IN", source: "Primary" },
+  { name: "rPET flake", category: "Materials / Recycled polymers", qty: "0.120", unit: "kg", provider: "rPET flake, post-consumer | TR", source: "Primary" },
+  { name: "Electricity, medium voltage", category: "Energy / Grid", qty: "1.420", unit: "kWh", provider: "Market for electricity | VN", source: "ecoinvent" },
+  { name: "Heat, natural gas", category: "Energy / Thermal", qty: "0.640", unit: "MJ", provider: "Steam production | VN", source: "ecoinvent" },
+  { name: "Water, deionised", category: "Process water", qty: "11.20", unit: "L", provider: "Tap water | VN", source: "ecoinvent" },
+  { name: "Reactive dye, mixed", category: "Chemicals / Dyes", qty: "0.014", unit: "kg", provider: "Dye production | RoW", source: "AI estimated" },
+  { name: "Sodium hydroxide, 50%", category: "Chemicals / Inorganic", qty: "0.022", unit: "kg", provider: "NaOH production | RER", source: "ecoinvent" },
+  { name: "LDPE polybag", category: "Packaging", qty: "0.008", unit: "kg", provider: "LDPE film | GLO", source: "ecoinvent" },
+  { name: "Corrugated board", category: "Packaging", qty: "0.045", unit: "kg", provider: "Corrugated board, recycled | EU", source: "ecoinvent" },
+  { name: "Transport, sea, container ship", category: "Logistics", qty: "14.20", unit: "tkm", provider: "Sea freight, transoceanic | GLO", source: "ecoinvent" },
+];
+
+const ELEM_FLOWS = [
+  { name: "Carbon dioxide, fossil", compartment: "Air / unspecified", qty: "2.940", unit: "kg", cf: "1.00 kg CO₂e/kg" },
+  { name: "Methane, fossil", compartment: "Air / unspecified", qty: "0.0042", unit: "kg", cf: "29.8 kg CO₂e/kg" },
+  { name: "Dinitrogen monoxide", compartment: "Air / unspecified", qty: "0.00018", unit: "kg", cf: "273 kg CO₂e/kg" },
+  { name: "Water, river", compartment: "Resource / in water", qty: "9.84", unit: "L", cf: "AWARE 12.4" },
+  { name: "Particulates, < 2.5 µm", compartment: "Air / urban", qty: "0.0011", unit: "kg", cf: "PM2.5 health" },
+  { name: "BOD5, biological oxygen demand", compartment: "Water / surface", qty: "0.0036", unit: "kg", cf: "Eutroph. 0.05" },
+];
+
+const IMPACT_METHODS = [
+  { name: "IPCC 2021, GWP 100a", value: "3.24", unit: "kg CO₂e", contrib: 100 },
+  { name: "ReCiPe 2016 — Climate change", value: "3.19", unit: "kg CO₂e", contrib: 98 },
+  { name: "ReCiPe 2016 — Water consumption", value: "0.041", unit: "m³", contrib: 64 },
+  { name: "ReCiPe 2016 — Fossil resource scarcity", value: "1.18", unit: "kg oil-eq", contrib: 71 },
+  { name: "EF 3.1 — Particulate matter", value: "8.4e-8", unit: "disease inc.", contrib: 22 },
+  { name: "USEtox — Ecotoxicity, freshwater", value: "0.62", unit: "CTUe", contrib: 38 },
+];
+
+function StepModel({ go }: { go: (s: Step) => void }) {
+  const [selected, setSelected] = useState("dye");
+  const [tab, setTab] = useState<"techno" | "elem" | "params" | "impact">("techno");
+  const proc = MODEL_PROCESSES.find((p) => p.id === selected)!;
+
+  const nodeStyle = (kind: string, active: boolean): React.CSSProperties => ({
+    padding: "10px 12px",
+    borderRadius: 10,
+    border: `1px solid ${active ? "var(--green-dark)" : "var(--border-solid)"}`,
+    background: active ? "var(--green-light)" : kind === "product" ? "white" : kind === "background" ? "var(--gray-section)" : "white",
+    boxShadow: active ? "0 0 0 3px rgba(44,107,69,0.12)" : "0 1px 2px rgba(0,0,0,0.03)",
+    cursor: "pointer",
+    fontSize: 12.5,
+    lineHeight: 1.35,
+    minWidth: 168,
+    transition: "all 160ms ease",
+  });
+
+  const Node = ({ id, x, y }: { id: string; x: number; y: number }) => {
+    const p = MODEL_PROCESSES.find((m) => m.id === id)!;
+    const active = selected === id;
+    return (
+      <foreignObject x={x} y={y} width={184} height={62}>
+        <div onClick={() => setSelected(id)} style={nodeStyle(p.kind, active)}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
+            <span style={{ fontWeight: 500, color: "var(--text-primary)" }}>{p.name}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4, color: "var(--text-tertiary)", fontSize: 11 }}>
+            <span>{p.loc} · {p.db}</span>
+            <span className="tabular" style={{ color: p.kind === "product" ? "var(--green-dark)" : "var(--text-secondary)", fontWeight: 500 }}>{p.co2} g</span>
+          </div>
+        </div>
+      </foreignObject>
+    );
+  };
+
+  const Arrow = ({ x1, y1, x2, y2, label }: { x1: number; y1: number; x2: number; y2: number; label?: string }) => (
+    <g>
+      <defs>
+        <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="#9B9B95" />
+        </marker>
+      </defs>
+      <path d={`M${x1},${y1} C${(x1 + x2) / 2},${y1} ${(x1 + x2) / 2},${y2} ${x2},${y2}`}
+        stroke="#C8C8C2" strokeWidth="1.25" fill="none" markerEnd="url(#arr)" />
+      {label && (
+        <text x={(x1 + x2) / 2} y={(y1 + y2) / 2 - 4} textAnchor="middle" fontSize="10" fill="#9B9B95" fontFamily="SF Mono, Menlo, monospace">{label}</text>
+      )}
+    </g>
+  );
+
+  return (
+    <div style={{ padding: 40 }}>
+      <BackBtn go={go} to={3} />
+      <StepDots current={4} />
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 8, flexWrap: "wrap", gap: 16 }}>
+        <div>
+          <Eyebrow>Step 3.5 · LCA model</Eyebrow>
+          <h1 className="page-title">Product system & inventory</h1>
+          <p className="body-text" style={{ marginTop: 8, maxWidth: 680 }}>
+            Review the unit processes, technosphere links and elementary flows that make up your product system. Drill into any node to inspect inputs, outputs and data sources.
+          </p>
+        </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <span className="chip chip-gray">Functional unit · 1 tote bag</span>
+          <span className="chip chip-green">Allocation · mass</span>
+          <span className="chip chip-blue">Method · IPCC 2021 GWP100</span>
+        </div>
+      </div>
+
+      {/* Toolbar */}
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "10px 14px", background: "white", border: "1px solid var(--border)",
+        borderRadius: 12, marginTop: 20, marginBottom: 16, fontSize: 13,
+      }}>
+        <div style={{ display: "flex", gap: 16, color: "var(--text-secondary)" }}>
+          <span>9 processes</span><span>·</span>
+          <span>10 technosphere flows</span><span>·</span>
+          <span>34 elementary flows</span><span>·</span>
+          <span>2 parameters</span>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button className="btn btn-outline btn-sm">Validate model</button>
+          <button className="btn btn-outline btn-sm">Export · ILCD</button>
+        </div>
+      </div>
+
+      {/* 3-column work area */}
+      <div style={{ display: "grid", gridTemplateColumns: "240px 1fr 300px", gap: 16, alignItems: "stretch" }}>
+        {/* Left: process tree */}
+        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+          <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--border)", fontSize: 12, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--text-tertiary)" }}>Product system</div>
+          <div style={{ padding: 8, fontSize: 13 }}>
+            <TreeNode label="Recycled Tote Bag" depth={0} bold />
+            <TreeNode label="Foreground processes" depth={1} muted />
+            {MODEL_PROCESSES.filter((p) => p.kind === "foreground").map((p) => (
+              <TreeNode key={p.id} label={p.name} depth={2} active={selected === p.id} onClick={() => setSelected(p.id)} />
+            ))}
+            <TreeNode label="Background (database)" depth={1} muted />
+            {MODEL_PROCESSES.filter((p) => p.kind === "background").map((p) => (
+              <TreeNode key={p.id} label={p.name} depth={2} active={selected === p.id} onClick={() => setSelected(p.id)} />
+            ))}
+          </div>
+        </div>
+
+        {/* Center: flow canvas */}
+        <div className="card" style={{ padding: 0, overflow: "hidden", background: "linear-gradient(180deg, #fff, #FAFAF8)" }}>
+          <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: 13, fontWeight: 500 }}>Process network</span>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button className="btn btn-ghost btn-sm">Auto-layout</button>
+              <button className="btn btn-ghost btn-sm">Fit</button>
+            </div>
+          </div>
+          <div style={{ position: "relative", height: 460 }}>
+            {/* grid */}
+            <svg width="100%" height="100%" viewBox="0 0 880 460" style={{ display: "block" }}>
+              <defs>
+                <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+                  <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#EFEFEA" strokeWidth="0.5" />
+                </pattern>
+              </defs>
+              <rect width="880" height="460" fill="url(#grid)" />
+
+              {/* arrows */}
+              <Arrow x1={194} y1={70} x2={330} y2={140} label="0.18 kg" />
+              <Arrow x1={194} y1={170} x2={330} y2={150} label="0.12 kg" />
+              <Arrow x1={514} y1={150} x2={650} y2={150} label="0.30 kg yarn" />
+              <Arrow x1={514} y1={250} x2={650} y2={210} label="fabric" />
+              <Arrow x1={194} y1={280} x2={330} y2={250} label="grid VN" />
+              <Arrow x1={834} y1={150} x2={834} y2={230} />
+              <Arrow x1={834} y1={290} x2={834} y2={350} />
+              <Arrow x1={194} y1={370} x2={650} y2={370} label="14.2 tkm sea freight" />
+
+              {/* nodes */}
+              <Node id="cotton" x={10} y={40} />
+              <Node id="rpet" x={10} y={140} />
+              <Node id="yarn" x={330} y={120} />
+              <Node id="weave" x={330} y={220} />
+              <Node id="dye" x={650} y={120} />
+              <Node id="cutsew" x={650} y={220} />
+              <Node id="pack" x={650} y={320} />
+              <Node id="freight" x={10} y={340} />
+              <Node id="tote" x={650} y={400 - 80} />
+
+              {/* legend */}
+              <g transform="translate(16,420)">
+                <rect width="10" height="10" fill="#fff" stroke="#E8E8E4" />
+                <text x="16" y="9" fontSize="10.5" fill="#6B6B65">Foreground</text>
+                <rect x="100" width="10" height="10" fill="#F4F4F0" stroke="#E8E8E4" />
+                <text x="116" y="9" fontSize="10.5" fill="#6B6B65">Background</text>
+                <rect x="220" width="10" height="10" fill="#EBF4EE" stroke="#2C6B45" />
+                <text x="236" y="9" fontSize="10.5" fill="#6B6B65">Selected</text>
+              </g>
+            </svg>
+          </div>
+        </div>
+
+        {/* Right: inspector */}
+        <div className="card" style={{ padding: 0 }}>
+          <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--border)" }}>
+            <div className="label">Process inspector</div>
+            <div style={{ fontSize: 15, fontWeight: 500, marginTop: 6 }}>{proc.name}</div>
+            <div style={{ fontSize: 12, color: "var(--text-tertiary)", marginTop: 2 }}>{proc.loc} · {proc.db}</div>
+          </div>
+          <div style={{ padding: 16, fontSize: 13, display: "flex", flexDirection: "column", gap: 10 }}>
+            <KV k="Reference flow" v="1 kg fabric, finished" />
+            <KV k="Allocation" v="Mass-based" />
+            <KV k="Time period" v="2023 – 2024" />
+            <KV k="Geography" v={proc.loc} />
+            <KV k="Data quality" v={<span className="chip chip-green" style={{ padding: "2px 8px", fontSize: 11 }}>Pedigree 2.1</span>} />
+            <KV k="GWP100 contribution" v={<span className="tabular" style={{ fontWeight: 500 }}>{proc.co2} g CO₂e</span>} />
+            <div style={{ borderTop: "1px solid var(--border)", margin: "6px 0" }} />
+            <div className="label">Uncertainty</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ flex: 1, height: 6, background: "var(--gray-section)", borderRadius: 4, position: "relative", overflow: "hidden" }}>
+                <div style={{ position: "absolute", left: "18%", right: "26%", top: 0, bottom: 0, background: "var(--green-mid)", borderRadius: 4 }} />
+              </div>
+              <span className="tabular" style={{ fontSize: 12, color: "var(--text-secondary)" }}>±14%</span>
+            </div>
+            <div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>Lognormal, GSD² = 1.18 (pedigree matrix)</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs: inventory */}
+      <div style={{ marginTop: 24 }}>
+        <div style={{ display: "flex", gap: 4, borderBottom: "1px solid var(--border)" }}>
+          {[
+            ["techno", "Inputs & outputs", "10"],
+            ["elem", "Elementary flows", "34"],
+            ["params", "Parameters", "2"],
+            ["impact", "Impact assessment", "6"],
+          ].map(([id, label, count]) => (
+            <button key={id} onClick={() => setTab(id as typeof tab)} style={{
+              padding: "10px 14px", fontSize: 13, fontWeight: 500,
+              color: tab === id ? "var(--text-primary)" : "var(--text-tertiary)",
+              borderBottom: `2px solid ${tab === id ? "var(--green-dark)" : "transparent"}`,
+              marginBottom: -1,
+            }}>
+              {label} <span style={{ color: "var(--text-tertiary)", marginLeft: 6, fontWeight: 400 }}>{count}</span>
+            </button>
+          ))}
+        </div>
+
+        <div style={{ marginTop: 16 }}>
+          {tab === "techno" && <FlowTable rows={TECHNO_FLOWS} cols={["Flow", "Category", "Amount", "Unit", "Provider", "Source"]} />}
+          {tab === "elem" && <FlowTable rows={ELEM_FLOWS.map((f) => ({ name: f.name, category: f.compartment, qty: f.qty, unit: f.unit, provider: f.cf, source: "Characterised" }))} cols={["Flow", "Compartment", "Amount", "Unit", "Char. factor", "Method"]} />}
+          {tab === "params" && (
+            <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <thead>
+                  <tr style={{ background: "var(--gray-section)" }}>
+                    {["Name", "Formula", "Value", "Unit", "Scope"].map((h) => (
+                      <th key={h} style={{ textAlign: "left", padding: "10px 14px", fontSize: 11, fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    ["yield_loss", "0.04", "0.04", "ratio", "Foreground"],
+                    ["renewable_share", "0.18 + 0.02 * year", "0.22", "ratio", "Global"],
+                  ].map((r, i) => (
+                    <tr key={i} style={{ borderTop: "1px solid var(--border)" }}>
+                      {r.map((c, j) => <td key={j} className={j > 0 ? "mono" : ""} style={{ padding: "12px 14px" }}>{c}</td>)}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {tab === "impact" && (
+            <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <thead>
+                  <tr style={{ background: "var(--gray-section)" }}>
+                    {["Method / category", "Result", "Unit", "Contribution"].map((h) => (
+                      <th key={h} style={{ textAlign: "left", padding: "10px 14px", fontSize: 11, fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {IMPACT_METHODS.map((m, i) => (
+                    <tr key={i} style={{ borderTop: "1px solid var(--border)" }}>
+                      <td style={{ padding: "12px 14px", fontWeight: 500 }}>{m.name}</td>
+                      <td className="mono tabular" style={{ padding: "12px 14px" }}>{m.value}</td>
+                      <td style={{ padding: "12px 14px", color: "var(--text-secondary)" }}>{m.unit}</td>
+                      <td style={{ padding: "12px 14px", width: 240 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <div style={{ flex: 1, height: 6, background: "var(--gray-section)", borderRadius: 4, overflow: "hidden" }}>
+                            <div style={{ width: `${m.contrib}%`, height: "100%", background: "var(--green-mid)" }} />
+                          </div>
+                          <span className="tabular" style={{ fontSize: 12, color: "var(--text-secondary)", width: 36, textAlign: "right" }}>{m.contrib}%</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <button onClick={() => go(4)} className="btn btn-primary" style={{ width: "100%", marginTop: 28, padding: 14 }}>
+        Calculate footprint →
+      </button>
+    </div>
+  );
+}
+
+function TreeNode({ label, depth, bold, muted, active, onClick }: { label: string; depth: number; bold?: boolean; muted?: boolean; active?: boolean; onClick?: () => void }) {
+  return (
+    <div onClick={onClick} style={{
+      padding: "6px 8px", paddingLeft: 8 + depth * 14,
+      borderRadius: 6, cursor: onClick ? "pointer" : "default",
+      background: active ? "var(--green-light)" : "transparent",
+      color: muted ? "var(--text-tertiary)" : active ? "var(--green-dark)" : "var(--text-primary)",
+      fontWeight: bold ? 600 : active ? 500 : 400,
+      fontSize: muted ? 11 : 13,
+      textTransform: muted ? "uppercase" : "none",
+      letterSpacing: muted ? "0.06em" : "normal",
+      display: "flex", alignItems: "center", gap: 6,
+    }}>
+      {!muted && depth > 0 && <span style={{ color: "var(--text-tertiary)" }}>{depth === 2 ? "└" : "•"}</span>}
+      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
+    </div>
+  );
+}
+
+function KV({ k, v }: { k: string; v: ReactNode }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+      <span style={{ color: "var(--text-tertiary)", fontSize: 12 }}>{k}</span>
+      <span style={{ textAlign: "right" }}>{v}</span>
+    </div>
+  );
+}
+
+type FlowRow = { name: string; category: string; qty: string; unit: string; provider: string; source: string };
+function FlowTable({ rows, cols }: { rows: FlowRow[]; cols: string[] }) {
+  return (
+    <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+        <thead>
+          <tr style={{ background: "var(--gray-section)" }}>
+            {cols.map((h) => (
+              <th key={h} style={{ textAlign: "left", padding: "10px 14px", fontSize: 11, fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={i} style={{ borderTop: "1px solid var(--border)" }}>
+              <td style={{ padding: "12px 14px", fontWeight: 500 }}>{r.name}</td>
+              <td style={{ padding: "12px 14px", color: "var(--text-secondary)" }}>{r.category}</td>
+              <td className="mono tabular" style={{ padding: "12px 14px" }}>{r.qty}</td>
+              <td style={{ padding: "12px 14px", color: "var(--text-secondary)" }}>{r.unit}</td>
+              <td style={{ padding: "12px 14px", color: "var(--text-secondary)" }}>{r.provider}</td>
+              <td style={{ padding: "12px 14px" }}>
+                <span className={`chip ${r.source === "Primary" ? "chip-green" : r.source === "AI estimated" ? "chip-amber" : "chip-blue"}`} style={{ fontSize: 11 }}>{r.source}</span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
