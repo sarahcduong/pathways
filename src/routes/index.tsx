@@ -380,8 +380,8 @@ function Step1({ lcaData, setLcaData, go }: { lcaData: LcaData; setLcaData: (f: 
           <div>· Send data requests to 4 teams</div>
         </div>
 
-        <button onClick={() => go(2)} className="btn btn-primary" style={{ width: "100%", marginTop: 24, padding: "14px" }}>
-          Start LCA →
+        <button onClick={() => go("prm")} className="btn btn-primary" style={{ width: "100%", marginTop: 24, padding: "14px" }}>
+          Connect PRM & start LCA →
         </button>
       </div>
     </div>
