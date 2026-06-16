@@ -420,7 +420,7 @@ function Step1({ lcaData, setLcaData, go }: { lcaData: LcaData; setLcaData: (f: 
           <div>· Set your functional unit to 1 unit of {lcaData.productName}</div>
           <div>· Apply {lcaData.boundary.replace(/-/g, " ")} system boundary</div>
           <div>· Use ecoinvent 3.10 + Higg MSI 3.7 {lcaData.category} emission factors</div>
-          <div>· Send data requests to 4 teams</div>
+          <div>· Send data requests to 16 owners (9 internal Carter's HQ + 7 external vendor contacts)</div>
         </div>
 
         <button onClick={() => go("prm")} className="btn btn-primary" style={{ width: "100%", marginTop: 24, padding: "14px" }}>
