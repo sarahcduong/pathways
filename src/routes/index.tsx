@@ -2382,3 +2382,209 @@ function Library({ go, pushToast }: { go: (s: Step) => void; pushToast: (t: stri
     </div>
   );
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// SUPPLIER-SIDE VIEW — what Sunil at Shahi Exports sees after email click
+// ─────────────────────────────────────────────────────────────────────
+
+function SupplierUpload({ go, pushToast }: { go: (s: Step) => void; pushToast: (t: string, k?: Toast["kind"]) => void }) {
+  const [step, setStep] = useState<"email" | "form" | "done">("email");
+  const [filled, setFilled] = useState<Record<string, boolean>>({});
+  const [uploaded, setUploaded] = useState<Record<string, string | null>>({ gots: null, energy: null, packaging: null });
+
+  const fields = [
+    { id: "matComp", label: "Primary material composition", help: "Confirm the fabric blend used for Style 225G731 — we've pre-filled from your last submission.", prefill: "60% organic cotton (GOTS) + 40% Lenzing™ EcoVero™ viscose" },
+    { id: "weight",  label: "Component weight (g per garment)", help: "Total fabric weight per piece, excluding trim.", prefill: "112" },
+    { id: "scrap",   label: "Cut-and-sew scrap rate (%)",       help: "Average for this style over the last 90 days.", prefill: "3.4" },
+    { id: "pkgWt",   label: "Packaging weight (g per 3-pack)",  help: "Polybag + hangtag + carton allocation.", prefill: "18" },
+  ];
+  const uploads = [
+    { id: "gots",      label: "GOTS Scope Certificate", hint: "PDF · current cycle" },
+    { id: "energy",    label: "Facility energy log (last 90 days)", hint: "CSV or XLSX · kWh by source" },
+    { id: "packaging", label: "Packaging spec sheet", hint: "PDF or image" },
+  ];
+  const filledCount = Object.values(filled).filter(Boolean).length + Object.values(uploaded).filter(Boolean).length;
+  const totalCount = fields.length + uploads.length;
+  const pct = Math.round((filledCount / totalCount) * 100);
+
+  function fakeUpload(id: string, name: string) {
+    setUploaded((u) => ({ ...u, [id]: name }));
+    pushToast(`${name} uploaded`, "success");
+  }
+
+  return (
+    <div style={{ padding: 40, maxWidth: 980 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+        <button onClick={() => go(2)} className="btn btn-ghost btn-sm">← Back to Pathways (internal view)</button>
+        <span className="chip chip-blue" style={{ fontSize: 11 }}>Demo · External supplier perspective</span>
+      </div>
+
+      <Eyebrow>Supplier preview</Eyebrow>
+      <h1 className="page-title" style={{ marginBottom: 10 }}>What Sunil at Shahi Exports sees.</h1>
+      <p className="body-text" style={{ maxWidth: 720, marginBottom: 28 }}>
+        Walkthrough of the supplier-side flow — from inbox to signed submission. Suppliers never create an account, never install anything, and only ever see the fields they own.
+      </p>
+
+      {/* Stage switcher */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 24, padding: 4, background: "var(--gray-section)", borderRadius: 10, width: "fit-content" }}>
+        {(["email", "form", "done"] as const).map((s) => (
+          <button key={s} onClick={() => setStep(s)} className="btn btn-sm" style={{
+            background: step === s ? "white" : "transparent",
+            color: step === s ? "var(--green-dark)" : "var(--text-secondary)",
+            boxShadow: step === s ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+            fontWeight: 500,
+          }}>
+            {s === "email" ? "1 · Email" : s === "form" ? "2 · Upload form" : "3 · Confirmation"}
+          </button>
+        ))}
+      </div>
+
+      {/* ── STAGE 1: EMAIL ── */}
+      {step === "email" && (
+        <div className="card" style={{ padding: 0, overflow: "hidden", maxWidth: 720 }}>
+          <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--border)", background: "var(--gray-section)", fontSize: 12, color: "var(--text-tertiary)", display: "flex", justifyContent: "space-between" }}>
+            <span>Inbox · sunil.mehta@shahi.co.in</span>
+            <span>June 13, 2026 · 9:05am IST</span>
+          </div>
+          <div style={{ padding: "22px 24px", borderBottom: "1px solid var(--border)" }}>
+            <div style={{ fontSize: 13, color: "var(--text-tertiary)", marginBottom: 6 }}>From <strong style={{ color: "var(--text-primary)" }}>Priya Raghavan</strong> &lt;priya.raghavan@carters.com&gt; via Pathways</div>
+            <div style={{ fontSize: 13, color: "var(--text-tertiary)", marginBottom: 14 }}>Subject: <strong style={{ color: "var(--text-primary)" }}>Data request — Style 225G731 (Little Planet™ 3-Pack Sleep & Play)</strong></div>
+            <p style={{ fontSize: 14, lineHeight: 1.7, marginBottom: 14 }}>Hi Sunil,</p>
+            <p style={{ fontSize: 14, lineHeight: 1.7, marginBottom: 14 }}>
+              We're refreshing the lifecycle assessment for <strong>Style 225G731</strong>, which Shahi cuts and sews at Unit 8. To complete it, I need 4 short data points and 3 documents from your team.
+            </p>
+            <p style={{ fontSize: 14, lineHeight: 1.7, marginBottom: 14 }}>
+              The form is pre-filled with your last submission — most fields just need a quick confirm. Should take <strong>under 10 minutes</strong>. No login or account required.
+            </p>
+            <button onClick={() => setStep("form")} className="btn btn-primary" style={{ marginTop: 6, marginBottom: 16, padding: "12px 22px" }}>
+              Open data request →
+            </button>
+            <p style={{ fontSize: 13, color: "var(--text-tertiary)", lineHeight: 1.6 }}>
+              This link is unique to you and expires June 27. Questions? Reply directly to this email.<br />
+              — Priya
+            </p>
+          </div>
+          <div style={{ padding: "12px 20px", background: "var(--gray-section)", fontSize: 11, color: "var(--text-tertiary)", textAlign: "center" }}>
+            Sent securely via Pathways · pathways.carters.com/r/9F2K-A81P
+          </div>
+        </div>
+      )}
+
+      {/* ── STAGE 2: FORM ── */}
+      {step === "form" && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 280px", gap: 24, alignItems: "start" }}>
+          <div>
+            {/* Branded header */}
+            <div className="card" style={{ padding: 20, marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <div style={{ fontSize: 12, color: "var(--text-tertiary)", marginBottom: 4 }}>Data request from Carter's, Inc.</div>
+                <div style={{ fontWeight: 500, fontSize: 16 }}>Style 225G731 · Little Planet™ 3-Pack Sleep & Play</div>
+                <div style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 2 }}>For Sunil Mehta · Shahi Exports · Unit 8, Bengaluru</div>
+              </div>
+              <span className="chip chip-green" style={{ fontSize: 11 }}>Secure link · expires Jun 27</span>
+            </div>
+
+            {/* Pre-filled fields */}
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div className="card-title" style={{ marginBottom: 4 }}>Confirm 4 data points</div>
+              <div style={{ fontSize: 13, color: "var(--text-tertiary)", marginBottom: 16 }}>
+                Pre-filled from your June 2025 submission. Just edit if anything's changed and check the box to confirm.
+              </div>
+              {fields.map((f) => (
+                <div key={f.id} style={{ paddingTop: 14, paddingBottom: 14, borderTop: "1px solid var(--border)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 6 }}>
+                    <label style={{ fontSize: 14, fontWeight: 500 }}>{f.label}</label>
+                    <label style={{ fontSize: 12, color: "var(--text-tertiary)", display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                      <input type="checkbox" checked={!!filled[f.id]} onChange={(e) => setFilled((s) => ({ ...s, [f.id]: e.target.checked }))} />
+                      Confirm
+                    </label>
+                  </div>
+                  <input className="input" defaultValue={f.prefill} style={{ fontSize: 14 }} />
+                  <div style={{ fontSize: 12, color: "var(--text-tertiary)", marginTop: 6 }}>{f.help}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Upload */}
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div className="card-title" style={{ marginBottom: 4 }}>Attach 3 documents</div>
+              <div style={{ fontSize: 13, color: "var(--text-tertiary)", marginBottom: 16 }}>
+                Drag &amp; drop, or click to browse. PDF, CSV, XLSX, JPG/PNG accepted.
+              </div>
+              {uploads.map((u) => (
+                <div key={u.id} style={{ paddingTop: 14, paddingBottom: 14, borderTop: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 14 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 500 }}>{u.label}</div>
+                    <div style={{ fontSize: 12, color: "var(--text-tertiary)", marginTop: 2 }}>{u.hint}</div>
+                  </div>
+                  {uploaded[u.id] ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span className="chip chip-green" style={{ fontSize: 11 }}>✓ {uploaded[u.id]}</span>
+                      <button className="btn btn-ghost btn-sm" onClick={() => setUploaded((s) => ({ ...s, [u.id]: null }))}>Replace</button>
+                    </div>
+                  ) : (
+                    <button className="btn btn-outline btn-sm" onClick={() => fakeUpload(u.id, u.id === "gots" ? "GOTS_Cert_2026.pdf" : u.id === "energy" ? "Unit8_energy_Q2.csv" : "Pkg_spec_v3.pdf")}>
+                      ↑ Upload file
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Sign + submit */}
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div className="card-title" style={{ marginBottom: 10 }}>Sign &amp; submit</div>
+              <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 12 }}>
+                By submitting, you confirm the data above is accurate to the best of your knowledge. A signed PDF receipt will be emailed to you and to Priya at Carter's.
+              </p>
+              <input className="input" placeholder="Type your full name to sign" style={{ fontSize: 14, marginBottom: 12 }} />
+              <button onClick={() => { setStep("done"); pushToast("Submission received — Pathways notified Priya", "success"); }}
+                className="btn btn-primary" style={{ width: "100%", padding: 14 }}>
+                Submit data request
+              </button>
+            </div>
+          </div>
+
+          {/* Right rail */}
+          <div style={{ position: "sticky", top: 90 }}>
+            <div className="card" style={{ marginBottom: 14 }}>
+              <div className="label" style={{ marginBottom: 8 }}>Progress</div>
+              <div style={{ fontSize: 22, fontWeight: 500, marginBottom: 6 }}>{filledCount}/{totalCount}</div>
+              <div style={{ height: 6, background: "var(--border-solid)", borderRadius: 4, overflow: "hidden", marginBottom: 10 }}>
+                <div style={{ width: `${pct}%`, height: "100%", background: "var(--green-dark)", transition: "width 300ms ease" }} />
+              </div>
+              <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>Est. {Math.max(2, 10 - Math.round(filledCount * 1.2))} min remaining</div>
+            </div>
+            <div className="card" style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.6 }}>
+              <div style={{ fontWeight: 500, color: "var(--text-primary)", marginBottom: 6 }}>Why we're asking</div>
+              Carter's is calculating the lifecycle footprint of Style 225G731 to meet its Raise the Future 2030 commitments. Your data covers the cut &amp; sew stage only — Tier-2 mill data is requested separately from Arvind.
+              <div style={{ borderTop: "1px solid var(--border)", marginTop: 12, paddingTop: 12, fontWeight: 500, color: "var(--text-primary)", marginBottom: 6 }}>Need help?</div>
+              Reply to the email, or chat with Priya at <span className="mono">priya.raghavan@carters.com</span>.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── STAGE 3: DONE ── */}
+      {step === "done" && (
+        <div className="card" style={{ padding: 32, maxWidth: 620, textAlign: "center" }}>
+          <div style={{
+            width: 56, height: 56, borderRadius: "50%", background: "var(--green-light)",
+            color: "var(--green-dark)", display: "flex", alignItems: "center", justifyContent: "center",
+            margin: "0 auto 18px", fontSize: 28,
+          }}>✓</div>
+          <h2 className="section-title" style={{ marginBottom: 8 }}>Thank you, Sunil.</h2>
+          <p className="body-text" style={{ marginBottom: 20 }}>
+            Your submission was received and a signed PDF receipt has been emailed to you and to Priya at Carter's. No further action is needed.
+          </p>
+          <div style={{ background: "var(--gray-section)", padding: 14, borderRadius: 10, fontSize: 13, color: "var(--text-secondary)", textAlign: "left", marginBottom: 18 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0" }}><span>Reference</span><span className="mono">PW-225G731-SHAHI-0613</span></div>
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0" }}><span>Submitted</span><span>June 14, 2026 · 6:12pm IST</span></div>
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0" }}><span>Next refresh</span><span>~Q2 2027 (annual cycle)</span></div>
+          </div>
+          <button onClick={() => setStep("email")} className="btn btn-ghost btn-sm">Replay demo from start</button>
+        </div>
+      )}
+    </div>
+  );
+}
