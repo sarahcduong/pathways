@@ -91,7 +91,7 @@ function ImpactBridgeApp() {
     if (typeof window !== "undefined") window.scrollTo({ top: 0 });
   }
 
-  const stepNumber = typeof currentStep === "number" ? currentStep : 0;
+  const showTabs = currentStep !== "dashboard";
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
