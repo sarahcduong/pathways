@@ -260,7 +260,7 @@ function TabBar({ current, go }: { current: Step; go: (s: Step) => void }) {
   );
 }
 
-function StepDots() { return null; }
+
 
 function Eyebrow({ children }: { children: ReactNode }) {
   return <div className="label" style={{ marginBottom: 12 }}>{children}</div>;
