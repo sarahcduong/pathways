@@ -607,8 +607,8 @@ function Step3({ go }: { go: (s: Step) => void }) {
         </div>
       </div>
 
-      <button onClick={() => go(4)} className="btn btn-primary" style={{ width: "100%", marginTop: 28, padding: 14 }}>
-        Calculate footprint →
+      <button onClick={() => go("model")} className="btn btn-primary" style={{ width: "100%", marginTop: 28, padding: 14 }}>
+        Build the model →
       </button>
     </div>
   );
