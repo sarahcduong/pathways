@@ -105,7 +105,7 @@ function PathwaysApp() {
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <button onClick={() => go("dashboard")} style={{ display: "flex", alignItems: "center" }} aria-label="Pathways home">
-            <img src={pathwaysLogo.url} alt="Pathways" style={{ height: 22, width: "auto", display: "block" }} />
+            <img src={pathwaysLogo.url} alt="Pathways" style={{ height: 40, width: "auto", display: "block" }} />
           </button>
           <span style={{ width: 1, height: 18, background: "var(--border-solid)" }} />
           <span style={{ fontSize: 14, color: "var(--text-secondary)" }}>{lcaData.productName}</span>
