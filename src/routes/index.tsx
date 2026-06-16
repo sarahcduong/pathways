@@ -420,7 +420,7 @@ function Step1({ lcaData, setLcaData, go }: { lcaData: LcaData; setLcaData: (f: 
           <div>· Set your functional unit to 1 unit of {lcaData.productName}</div>
           <div>· Apply {lcaData.boundary.replace(/-/g, " ")} system boundary</div>
           <div>· Use ecoinvent 3.10 + Higg MSI 3.7 {lcaData.category} emission factors</div>
-          <div>· Send data requests to 4 teams</div>
+          <div>· Send data requests to 16 owners (9 internal Carter's HQ + 7 external vendor contacts)</div>
         </div>
 
         <button onClick={() => go("prm")} className="btn btn-primary" style={{ width: "100%", marginTop: 24, padding: "14px" }}>
@@ -435,80 +435,120 @@ function Step1({ lcaData, setLcaData, go }: { lcaData: LcaData; setLcaData: (f: 
 // STEP 2 — DATA COLLECTION
 // ─────────────────────────────────────────────────────────────────────
 
-const REQUESTS = [
-  { id: "procurement", icon: <I.box />, title: "Sourcing — Babywear", body: "Supplier list, fabric blend, certifications (GOTS, OEKO-TEX), unit FOB cost", who: "Priya Raghavan · Director, Sourcing — Babywear", sent: "June 13, 2026 at 9:04am", received: "June 13, 2026 at 2:31pm", status: "done" as const },
-  { id: "design", icon: <I.pencil />, title: "Design & Product Development", body: "Bill of materials, garment weight, snap & trim spec, durability target (wash cycles)", who: "Megan O'Connell · Senior Designer, Little Planet™", sent: "June 13, 2026 at 9:04am", received: "June 14, 2026 at 10:17am", status: "done" as const },
-  { id: "operations", icon: <I.factory />, title: "Manufacturing Ops", body: "Tier 1 facility energy mix, dyehouse process, scrap diversion rate", who: "Rakesh Iyer · Mfg Ops Lead, India South", sent: "June 13, 2026 at 9:04am", received: "—", status: "pending" as const },
-  { id: "logistics", icon: <I.truck />, title: "Global Logistics", body: "Mundra → Savannah lane, container utilization, inland drayage to Braselton, GA DC", who: "Daniel Reyes · Sr. Manager, Global Logistics", sent: "June 13, 2026 at 9:04am", received: "—", status: "pending" as const },
+type RequestStatus = "done" | "pending";
+const REQUESTS: { id: string; icon: ReactNode; title: string; body: string; who: string; sent: string; received: string; status: RequestStatus; group: "internal" | "external" }[] = [
+  // ── Internal — Carter's HQ (9) ──
+  { id: "pm",          group: "internal", icon: <I.box />,    title: "Product Management",            body: "BOM, product weight/dimensions, compliance deadlines, supplier contact list",                  who: "Alex Johnson · Sr. Product Manager, Little Planet™",       sent: "June 13, 2026 at 9:04am", received: "June 13, 2026 at 11:42am", status: "done"    },
+  { id: "design",      group: "internal", icon: <I.pencil />, title: "Design & Product Development",  body: "Material % composition, GSM, snap & trim spec, wash-cycle durability, end-of-life design",     who: "Megan O'Connell · Senior Designer, Little Planet™",        sent: "June 13, 2026 at 9:04am", received: "June 14, 2026 at 10:17am", status: "done"    },
+  { id: "rd",          group: "internal", icon: <I.pencil />, title: "R&D / Engineering",             body: "Process specs (knit, dye, finish), packaging design, disassembly index",                       who: "Wei Zhang · Textile R&D Engineer",                         sent: "June 13, 2026 at 9:04am", received: "—",                         status: "pending" },
+  { id: "sourcing",    group: "internal", icon: <I.box />,    title: "Sourcing — Babywear",           body: "Tier 1 + Tier 2 vendor list, fabric spec contracts, supplier locations, inbound freight",      who: "Priya Raghavan · Director, Sourcing — Babywear",           sent: "June 13, 2026 at 9:04am", received: "June 13, 2026 at 2:31pm",  status: "done"    },
+  { id: "procurement", group: "internal", icon: <I.box />,    title: "Procurement — Trims & Packaging", body: "Trim & packaging POs (YKK, Avery Dennison FSC), inbound packaging materials",                 who: "Hannah Park · Procurement Manager, Trims & Packaging",     sent: "June 13, 2026 at 9:04am", received: "June 14, 2026 at 8:55am",  status: "done"    },
+  { id: "mfgops",      group: "internal", icon: <I.factory />,title: "Manufacturing Ops",             body: "Tier 1 facility energy mix, water use, waste manifests, ZDHC ClearStream",                     who: "Rakesh Iyer · Mfg Ops Lead, India South",                  sent: "June 13, 2026 at 9:04am", received: "—",                         status: "pending" },
+  { id: "facilities",  group: "internal", icon: <I.factory />,title: "Facilities — Bengaluru",        body: "Per-line equipment efficiency, steam consumption, compressed-air kWh per run",                 who: "Anjali Krishnan · Facilities Manager, Shahi Unit 8 (embed)",sent: "June 13, 2026 at 9:04am", received: "—",                         status: "pending" },
+  { id: "logistics",   group: "internal", icon: <I.truck />,  title: "Global Logistics",              body: "Mundra → Savannah lane, container utilization, inbound/outbound freight volumes YTD",          who: "Daniel Reyes · Sr. Manager, Global Logistics",             sent: "June 13, 2026 at 9:04am", received: "June 13, 2026 at 4:08pm",  status: "done"    },
+  { id: "dcops",       group: "internal", icon: <I.truck />,  title: "Distribution — Braselton DC",   body: "Warehouse energy use, last-mile carrier mix from Braselton DC",                                who: "Marcus Lee · DC Operations Manager, Braselton GA",         sent: "June 13, 2026 at 9:04am", received: "—",                         status: "pending" },
+  // ── External — vendor contacts via DocuSign-style request (7) ──
+  { id: "shahi",       group: "external", icon: <I.box />,    title: "Tier 1 — Shahi Exports",        body: "Primary material production data, component EPDs, packaging weight",                           who: "Sunil Mehta · Sustainability Lead — Shahi Exports",        sent: "June 13, 2026 at 9:05am", received: "June 14, 2026 at 6:12pm",  status: "done"    },
+  { id: "arvind",      group: "external", icon: <I.box />,    title: "Tier 2 Mill — Arvind Limited",  body: "GOTS certificate, dye-house energy, effluent (kg) for the knit fabric",                       who: "Lakshmi Narayanan · EHS Manager — Arvind (Naroda)",        sent: "June 13, 2026 at 9:05am", received: "June 15, 2026 at 9:30am",  status: "done"    },
+  { id: "lenzing",     group: "external", icon: <I.box />,    title: "Tier 2 Fiber — Lenzing AG",     body: "EcoVero™ LCA module + FSC chain-of-custody for the 5% viscose blend",                          who: "Klaus Berger · Sustainability Manager — Lenzing AG",       sent: "June 13, 2026 at 9:05am", received: "June 14, 2026 at 1:48pm",  status: "done"    },
+  { id: "shahi-fin",   group: "external", icon: <I.factory />,title: "Contract Mfg — Shahi Unit 8 Finishing", body: "Per-unit energy (kWh), scrap rate, coating/printing process emissions",                  who: "Aditi Sharma · Plant Manager — Shahi Unit 8 Finishing",    sent: "June 13, 2026 at 9:05am", received: "—",                         status: "pending" },
+  { id: "ykk",         group: "external", icon: <I.box />,    title: "Trim Supplier — YKK SNAD",      body: "Snap material spec, nickel-free certificate, component weight per garment",                    who: "Tomoko Yamada · Account Manager — YKK SNAD (Tirupur)",     sent: "June 13, 2026 at 9:05am", received: "June 13, 2026 at 11:05pm", status: "done"    },
+  { id: "maersk",      group: "external", icon: <I.truck />,  title: "3PL Ocean — Maersk Spot",       body: "Mundra → Savannah lane distance, vessel fuel mix (VLSFO vs. bio-blend), TEU utilization",      who: "Henrik Sørensen · Account Director — Maersk Spot",         sent: "June 13, 2026 at 9:05am", received: "—",                         status: "pending" },
+  { id: "schneider",   group: "external", icon: <I.truck />,  title: "3PL Inland — Schneider National", body: "Savannah → Braselton drayage distance, diesel gal/mile, rail vs. road mode mix",             who: "Carla Mendes · Operations Lead — Schneider National",      sent: "June 13, 2026 at 9:05am", received: "—",                         status: "pending" },
 ];
+
 
 function Step2({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) => void; pushToast: (t: string, k?: Toast["kind"]) => void }) {
   const [modalOpen, setModalOpen] = useState(false);
-  const done = Object.values(lcaData.dataResponses).filter(Boolean).length;
+  const total = REQUESTS.length;
+  const done = REQUESTS.filter((r) => r.status === "done").length;
+  const pending = total - done;
+  const internalDone = REQUESTS.filter((r) => r.group === "internal" && r.status === "done").length;
+  const externalDone = REQUESTS.filter((r) => r.group === "external" && r.status === "done").length;
+  const internalTotal = REQUESTS.filter((r) => r.group === "internal").length;
+  const externalTotal = REQUESTS.filter((r) => r.group === "external").length;
 
   return (
     <div style={{ padding: 40 }}>
       <BackBtn go={go} to="prm" />
       <Eyebrow>Data Collection</Eyebrow>
-      <h1 className="page-title" style={{ marginBottom: 10 }}>Requests sent to 4 teams.</h1>
-      <p className="body-text" style={{ maxWidth: 720, marginBottom: 32 }}>
-        Pathways identified who owns each data point and sent them focused request forms. No spreadsheets. No email chains.
+      <h1 className="page-title" style={{ marginBottom: 10 }}>Requests sent to {total} owners.</h1>
+      <p className="body-text" style={{ maxWidth: 760, marginBottom: 32 }}>
+        Each of the {total} owners identified via Salesforce — {internalTotal} inside Carter's, {externalTotal} at vendor accounts — received a focused DocuSign-style request scoped to only the data they own. {done} have signed and submitted; {pending} are still outstanding.
       </p>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, maxWidth: 1100 }}>
-        {REQUESTS.map((r) => (
-          <div key={r.id} className="card card-hover">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ color: "var(--text-secondary)" }}>{r.icon}</div>
-                <div className="card-title">{r.title}</div>
-              </div>
-              {r.status === "done"
-                ? <span className="chip chip-green">Completed</span>
-                : <span className="chip chip-amber">Awaiting response</span>}
+      {(["internal", "external"] as const).map((g) => {
+        const items = REQUESTS.filter((r) => r.group === g);
+        const groupDone = items.filter((r) => r.status === "done").length;
+        const isInternal = g === "internal";
+        return (
+          <div key={g} style={{ marginBottom: 28 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, maxWidth: 1100 }}>
+              <span className={isInternal ? "chip chip-green" : "chip chip-blue"} style={{ fontSize: 11 }}>
+                {isInternal ? "Internal — Carter's HQ" : "External — vendor accounts"}
+              </span>
+              <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
+                {groupDone} of {items.length} responses received
+              </span>
             </div>
-            <div className="body-text" style={{ fontSize: 14, marginBottom: 16 }}>{r.body}</div>
-            <div style={{ fontSize: 12, color: "var(--text-tertiary)", display: "flex", flexDirection: "column", gap: 4 }}>
-              <div><span className="label" style={{ marginRight: 6 }}>Owner</span> {r.who}</div>
-              <div><span className="label" style={{ marginRight: 6 }}>Sent</span> {r.sent}</div>
-              <div><span className="label" style={{ marginRight: 6 }}>Received</span> {r.received}</div>
-            </div>
-            <div style={{ marginTop: 16, borderTop: "1px solid var(--border)", paddingTop: 14 }}>
-              {r.status === "done" ? (
-                <button onClick={() => r.id === "procurement" ? setModalOpen(true) : pushToast(`Opened ${r.title} response`, "info")}
-                  className="btn btn-outline btn-sm" style={{ color: "var(--green-dark)", borderColor: "var(--green-border)" }}>
-                  View response →
-                </button>
-              ) : (
-                <button onClick={() => pushToast(`Reminder sent to ${r.who.split(" · ")[0]}`, "info")}
-                  className="btn btn-outline btn-sm" style={{ color: "var(--amber)", borderColor: "var(--amber-border)" }}>
-                  Send reminder →
-                </button>
-              )}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, maxWidth: 1100 }}>
+              {items.map((r) => (
+                <div key={r.id} className="card card-hover">
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{ color: "var(--text-secondary)" }}>{r.icon}</div>
+                      <div className="card-title">{r.title}</div>
+                    </div>
+                    {r.status === "done"
+                      ? <span className="chip chip-green">Completed</span>
+                      : <span className="chip chip-amber">Awaiting response</span>}
+                  </div>
+                  <div className="body-text" style={{ fontSize: 14, marginBottom: 16 }}>{r.body}</div>
+                  <div style={{ fontSize: 12, color: "var(--text-tertiary)", display: "flex", flexDirection: "column", gap: 4 }}>
+                    <div><span className="label" style={{ marginRight: 6 }}>Owner</span> {r.who}</div>
+                    <div><span className="label" style={{ marginRight: 6 }}>Sent</span> {r.sent}</div>
+                    <div><span className="label" style={{ marginRight: 6 }}>Received</span> {r.received}</div>
+                  </div>
+                  <div style={{ marginTop: 16, borderTop: "1px solid var(--border)", paddingTop: 14 }}>
+                    {r.status === "done" ? (
+                      <button onClick={() => r.id === "sourcing" ? setModalOpen(true) : pushToast(`Opened ${r.title} response`, "info")}
+                        className="btn btn-outline btn-sm" style={{ color: "var(--green-dark)", borderColor: "var(--green-border)" }}>
+                        View response →
+                      </button>
+                    ) : (
+                      <button onClick={() => pushToast(`Reminder sent to ${r.who.split(" · ")[0]}`, "info")}
+                        className="btn btn-outline btn-sm" style={{ color: "var(--amber)", borderColor: "var(--amber-border)" }}>
+                        Send reminder →
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
-        ))}
-      </div>
+        );
+      })}
 
-      <div style={{ maxWidth: 1100, marginTop: 32 }}>
+      <div style={{ maxWidth: 1100, marginTop: 8 }}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-          <span style={{ fontSize: 14, fontWeight: 500 }}>{done} of 4 responses received</span>
-          <span style={{ fontSize: 13, color: "var(--text-tertiary)" }}>{Math.round((done / 4) * 100)}%</span>
+          <span style={{ fontSize: 14, fontWeight: 500 }}>{done} of {total} responses received · waiting on {pending}</span>
+          <span style={{ fontSize: 13, color: "var(--text-tertiary)" }}>{Math.round((done / total) * 100)}%</span>
         </div>
         <div style={{ height: 6, background: "var(--border-solid)", borderRadius: 4, overflow: "hidden" }}>
-          <div style={{ width: `${(done / 4) * 100}%`, height: "100%", background: "var(--green-dark)", transition: "width 400ms ease" }} />
+          <div style={{ width: `${(done / total) * 100}%`, height: "100%", background: "var(--green-dark)", transition: "width 400ms ease" }} />
         </div>
         <div style={{ marginTop: 10, fontSize: 13, color: "var(--text-secondary)" }}>
-          The platform will continue to the next step using available data. Missing inputs will be filled with ecoinvent 3.10 + Higg MSI 3.7 benchmarks.
+          Internal: {internalDone}/{internalTotal} · External: {externalDone}/{externalTotal}. Pathways will continue with available data — missing inputs are filled with ecoinvent 3.10 + Higg MSI 3.7 benchmarks and flagged in the audit trail.
         </div>
       </div>
 
       <div style={{ display: "flex", gap: 10, marginTop: 28 }}>
         <button onClick={() => go(3)} className="btn btn-primary">Continue with available data →</button>
-        <button onClick={() => pushToast("You can proceed now — missing data will be AI-filled in Step 3", "info")} className="btn btn-ghost">
+        <button onClick={() => pushToast(`Waiting on ${pending} owners — reminders queued for tomorrow 9am`, "info")} className="btn btn-ghost">
           Wait for all responses
         </button>
       </div>
+
 
       {modalOpen && (
         <Modal onClose={() => setModalOpen(false)} title="Sourcing Response — Priya Raghavan"
