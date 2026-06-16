@@ -1755,12 +1755,12 @@ function FlowTable({ rows, cols }: { rows: FlowRow[]; cols: string[] }) {
 // ─────────────────────────────────────────────────────────────────────
 
 const PRM_FIELDS = [
-  { sf: "Account.Brand__c", maps: "Carter's brand portfolio", val: "Little Planet™ (Carter's, Inc.)", conf: "exact" },
-  { sf: "Product2.Family", maps: "Functional unit basis", val: "Little Planet™ Organic Sleep & Play (3-Pack) · Style 225G731", conf: "exact" },
-  { sf: "Product2.Raise_The_Future_Pillar__c", maps: "Sustainability pillar tag", val: "Sustainably Made + Safe for Kids", conf: "exact" },
-  { sf: "Account.Vendor_Tier__c", maps: "Upstream boundary depth", val: "Tier 1 + Tier 2 (Shahi, Arvind, YKK, Lenzing, Unifi)", conf: "exact" },
-  { sf: "Opportunity.Manufacturing_Site__c", maps: "Operations facility", val: "Shahi Exports — Unit 8, Bengaluru, IN", conf: "exact" },
-  { sf: "Contact.Department + Role", maps: "Data owner routing", val: "16 owners auto-identified across 9 internal teams + 7 external partners", conf: "rule" },
+  { sf: "Account (Vendor) → Account.Parent", maps: "Account relationships — who supplies what", val: "11 vendor accounts linked to Style 225G731 BOM (Shahi, Arvind, Lenzing, YKK, Maersk…)", conf: "exact" },
+  { sf: "Contact (External) where AccountId IN :vendors", maps: "Supplier contacts — named person per vendor, not a generic inbox", val: "7 named supplier contacts (Sustainability, EHS, Plant Mgr, Account Director)", conf: "exact" },
+  { sf: "User + Contact (Internal) where Department IN (…)", maps: "Internal team members — procurement, ops, logistics owners", val: "9 Carter's HQ owners (Sourcing, Procurement, Mfg Ops, Facilities, Logistics, DC)", conf: "exact" },
+  { sf: "Contact.ReportsToId chain", maps: "Org hierarchy — right person vs. generic role inbox", val: "Resolved to individual owner at each vendor (skipped 4 shared aliases)", conf: "exact" },
+  { sf: "AccountContactRelation.Roles", maps: "Account ↔ material/component coverage", val: "Maps each contact to the BOM line they own (fabric, trim, fiber, freight)", conf: "rule" },
+  { sf: "Contact.Last_Verified_At__c", maps: "Contact freshness — avoids bouncing emails", val: "16/16 contacts verified in last 90 days", conf: "rule" },
 ];
 
 const PRM_OWNERS = [
@@ -1802,9 +1802,10 @@ function StepPRM({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) =
       
       <Eyebrow>PRM Integration</Eyebrow>
       <h1 className="page-title" style={{ marginBottom: 10 }}>How we knew who to ask.</h1>
-      <p className="body-text" style={{ maxWidth: 720, marginBottom: 28 }}>
-        Pathways connects to your partner relationship system to map every data point in the LCA scope to a real person — no spreadsheets, no guessing who owns what.
+      <p className="body-text" style={{ maxWidth: 760, marginBottom: 28 }}>
+        Salesforce is Pathways' source of <em>people</em> — supplier contacts, internal team members, account relationships, and org hierarchy. We use it to find the right named owner at each vendor and inside Carter's (not a generic <span className="mono">sustainability@…</span> alias). Every owner — internal and external — then receives the same DocuSign-style request form to upload the data they own.
       </p>
+
 
       {/* Connection bar */}
       <div className="card" style={{ padding: 18, marginBottom: 24, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
@@ -1880,25 +1881,29 @@ function StepPRM({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) =
         <div className="card">
           <div className="card-title" style={{ marginBottom: 12 }}>Routing logic</div>
           <p className="body-text" style={{ fontSize: 13, marginBottom: 14 }}>
-            Each LCA data category is routed to the Salesforce contact whose role + account ownership best matches the request.
+            We resolve each BOM line + facility to a named contact via Account relationships and the <span className="mono">ReportsTo</span> hierarchy — never a shared inbox.
           </p>
           <div className="mono" style={{
             background: "var(--gray-section)", padding: 14, borderRadius: 10,
             fontSize: 12, lineHeight: 1.7, color: "var(--text-primary)",
           }}>
-{`SELECT Contact.Id, Contact.Email,
-       Contact.Department, Contact.Role
+{`SELECT Contact.Id, Contact.Name, Contact.Email,
+       Contact.Title, Contact.ReportsToId,
+       Account.Name, AccountContactRelation.Roles
 FROM   Contact
-WHERE  AccountId IN :scopedAccounts
-  AND  Role IN ('Procurement','Design',
-                'Operations','Logistics')
+WHERE  AccountId IN :scopedVendorAccounts
+   OR  (Account.Name = 'Carter\\'s, Inc.'
+        AND Department IN ('Sourcing','Procurement',
+              'Mfg Ops','Logistics','DC Ops'))
   AND  IsActive = TRUE
-ORDER BY LastActivityDate DESC`}
+  AND  Last_Verified_At__c > LAST_N_DAYS:90
+ORDER BY ReportsToId NULLS LAST`}
           </div>
           <div style={{ marginTop: 12, fontSize: 12, color: "var(--text-tertiary)" }}>
-            Query runs against your org. Pathways never writes back.
+            Read-only. Pathways pulls contacts + account graph; LCA data itself comes from each owner's signed upload.
           </div>
         </div>
+
       </div>
 
       {/* Identified owners */}
@@ -1917,12 +1922,13 @@ ORDER BY LastActivityDate DESC`}
             <div key={groupName} style={{ marginBottom: 22 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
                 <span className={isExternal ? "chip chip-blue" : "chip chip-green"} style={{ fontSize: 11 }}>
-                  {isExternal ? "External — DocuSign-style request" : "Internal — Carter's HQ"}
+                  {isExternal ? "External vendors — DocuSign-style request" : "Internal Carter's HQ — DocuSign-style request"}
                 </span>
                 <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
-                  {groupOwners.length} {isExternal ? "partners" : "team members"} · {isExternal ? "primary data via signed request form" : "data pulled directly from internal systems"}
+                  {groupOwners.length} {isExternal ? "supplier contacts" : "team members"} · each receives a focused upload form scoped to the data they own
                 </span>
               </div>
+
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
                 {groupOwners.map((o) => (
                   <div key={o.name} className="card card-hover">
@@ -1962,9 +1968,10 @@ ORDER BY LastActivityDate DESC`}
         marginTop: 28, padding: 16, background: "var(--green-light)",
         border: "1px solid var(--green-border)", borderRadius: 12, fontSize: 14, lineHeight: 1.7,
       }}>
-        <div style={{ fontWeight: 500, marginBottom: 6 }}>Next: Pathways will send each owner a focused request form covering only the data they own.</div>
-        <div style={{ color: "var(--text-secondary)" }}>Forms auto-prefill 38 fields from Salesforce ({lcaData.productName}, BOM, supplier list, site address). Internal owners only fill what we can't pull automatically; external partners receive a DocuSign-style request scoped to their tier.</div>
+        <div style={{ fontWeight: 500, marginBottom: 6 }}>Next: every owner gets the same DocuSign-style request — focused on only the data they own.</div>
+        <div style={{ color: "var(--text-secondary)" }}>Pathways pre-fills each form with what Salesforce already knows about the recipient ({lcaData.productName}, their account, their BOM line / facility / lane). Internal owners (Sourcing, Mfg Ops, Logistics, DC) and external suppliers (Shahi, Arvind, Lenzing, YKK, Maersk, Schneider) all sign and submit through the same workflow — one audit trail, one inbox.</div>
       </div>
+
 
       <button onClick={() => go(2)} className="btn btn-primary" style={{ width: "100%", marginTop: 24, padding: 14 }}>
         Send requests to {PRM_OWNERS.length} owners (9 internal + 7 external) →
