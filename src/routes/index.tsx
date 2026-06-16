@@ -1968,9 +1968,10 @@ ORDER BY ReportsToId NULLS LAST`}
         marginTop: 28, padding: 16, background: "var(--green-light)",
         border: "1px solid var(--green-border)", borderRadius: 12, fontSize: 14, lineHeight: 1.7,
       }}>
-        <div style={{ fontWeight: 500, marginBottom: 6 }}>Next: Pathways will send each owner a focused request form covering only the data they own.</div>
-        <div style={{ color: "var(--text-secondary)" }}>Forms auto-prefill 38 fields from Salesforce ({lcaData.productName}, BOM, supplier list, site address). Internal owners only fill what we can't pull automatically; external partners receive a DocuSign-style request scoped to their tier.</div>
+        <div style={{ fontWeight: 500, marginBottom: 6 }}>Next: every owner gets the same DocuSign-style request — focused on only the data they own.</div>
+        <div style={{ color: "var(--text-secondary)" }}>Pathways pre-fills each form with what Salesforce already knows about the recipient ({lcaData.productName}, their account, their BOM line / facility / lane). Internal owners (Sourcing, Mfg Ops, Logistics, DC) and external suppliers (Shahi, Arvind, Lenzing, YKK, Maersk, Schneider) all sign and submit through the same workflow — one audit trail, one inbox.</div>
       </div>
+
 
       <button onClick={() => go(2)} className="btn btn-primary" style={{ width: "100%", marginTop: 24, padding: 14 }}>
         Send requests to {PRM_OWNERS.length} owners (9 internal + 7 external) →
