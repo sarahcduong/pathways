@@ -27,6 +27,18 @@ type LcaData = {
 
 const STEP_LABELS = ["Intake", "Data", "AI Fill", "Footprint", "Actions", "Scenario", "Assign"];
 
+const TABS: { id: Step; label: string }[] = [
+  { id: 1, label: "Intake" },
+  { id: "prm", label: "PRM" },
+  { id: 2, label: "Data" },
+  { id: 3, label: "AI Fill" },
+  { id: "model", label: "Model" },
+  { id: 4, label: "Footprint" },
+  { id: 5, label: "Actions" },
+  { id: 6, label: "Scenario" },
+  { id: 7, label: "Assign" },
+];
+
 // ─────────────────────────────────────────────────────────────────────
 // Icons (inline SVG)
 // ─────────────────────────────────────────────────────────────────────
@@ -79,7 +91,7 @@ function ImpactBridgeApp() {
     if (typeof window !== "undefined") window.scrollTo({ top: 0 });
   }
 
-  const stepNumber = typeof currentStep === "number" ? currentStep : 0;
+  const showTabs = currentStep !== "dashboard";
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
@@ -98,12 +110,10 @@ function ImpactBridgeApp() {
           <span style={{ fontSize: 14, color: "var(--text-secondary)" }}>{lcaData.productName}</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
-          {stepNumber > 0 && (
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>Step {stepNumber} of 7</span>
-              <div style={{ width: 80, height: 3, background: "var(--border-solid)", borderRadius: 2, overflow: "hidden" }}>
-                <div style={{ width: `${(stepNumber / 7) * 100}%`, height: "100%", background: "var(--green-dark)", transition: "width 300ms ease" }} />
-              </div>
+          {currentStep !== "dashboard" && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--text-tertiary)" }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--green-mid)" }} />
+              All changes saved · 2 min ago
             </div>
           )}
           <div style={{
@@ -165,6 +175,7 @@ function ImpactBridgeApp() {
         marginLeft: "var(--sidebar-width)", paddingTop: "var(--topbar-height)",
         minHeight: "100vh",
       }}>
+        {showTabs && <TabBar current={currentStep} go={go} />}
         <div className="fade-in" key={String(currentStep)}>
           {currentStep === 1 && <Step1 lcaData={lcaData} setLcaData={setLcaData} go={go} />}
           {currentStep === "prm" && <StepPRM lcaData={lcaData} go={go} pushToast={pushToast} />}
@@ -204,33 +215,52 @@ function ImpactBridgeApp() {
 // Shared sub-components
 // ─────────────────────────────────────────────────────────────────────
 
-function StepDots({ current }: { current: number }) {
+
+function TabBar({ current, go }: { current: Step; go: (s: Step) => void }) {
   return (
-    <div style={{ display: "flex", justifyContent: "center", gap: 0, marginBottom: 32 }}>
-      {STEP_LABELS.map((label, i) => {
-        const num = i + 1;
-        const done = num < current;
-        const active = num === current;
-        return (
-          <div key={label} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, minWidth: 80 }}>
-            <div style={{
-              width: active ? 10 : 8, height: active ? 10 : 8, borderRadius: "50%",
-              background: done || active ? "var(--green-dark)" : "var(--border-solid)",
-              color: "white", display: "flex", alignItems: "center", justifyContent: "center",
-              transition: "all 180ms ease",
-            }}>
-              {done && <I.check size={10} />}
-            </div>
-            <div style={{
-              fontSize: 11, fontWeight: active ? 600 : 400,
-              color: active ? "var(--text-primary)" : "var(--text-tertiary)",
-            }}>{label}</div>
-          </div>
-        );
-      })}
+    <div style={{
+      position: "sticky", top: "var(--topbar-height)", zIndex: 40,
+      background: "rgba(255,255,255,0.92)", backdropFilter: "blur(8px)",
+      borderBottom: "1px solid var(--border)",
+      padding: "0 40px",
+    }}>
+      <div style={{ display: "flex", gap: 2, overflowX: "auto", minHeight: 48, alignItems: "stretch" }}>
+        {TABS.map((t) => {
+          const active = t.id === current;
+          return (
+            <button
+              key={String(t.id)}
+              onClick={() => go(t.id)}
+              style={{
+                position: "relative", padding: "0 16px",
+                fontSize: 13, fontWeight: active ? 600 : 500,
+                color: active ? "var(--text-primary)" : "var(--text-secondary)",
+                whiteSpace: "nowrap", transition: "color 160ms ease",
+                display: "flex", alignItems: "center", gap: 8,
+              }}
+              onMouseEnter={(e) => { if (!active) e.currentTarget.style.color = "var(--text-primary)"; }}
+              onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = "var(--text-secondary)"; }}
+            >
+              <span style={{
+                width: 6, height: 6, borderRadius: "50%",
+                background: active ? "var(--green-dark)" : "var(--border-solid)",
+              }} />
+              {t.label}
+              {active && (
+                <span style={{
+                  position: "absolute", left: 8, right: 8, bottom: -1,
+                  height: 2, background: "var(--green-dark)", borderRadius: 2,
+                }} />
+              )}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
+
+
 
 function Eyebrow({ children }: { children: ReactNode }) {
   return <div className="label" style={{ marginBottom: 12 }}>{children}</div>;
@@ -269,9 +299,9 @@ function Step1({ lcaData, setLcaData, go }: { lcaData: LcaData; setLcaData: (f: 
 
   return (
     <div style={{ maxWidth: 640, margin: "0 auto", padding: "48px 24px" }}>
-      <StepDots current={1} />
+      
       <div className="card">
-        <Eyebrow>Step 1 of 7 — LCA Intake</Eyebrow>
+        <Eyebrow>LCA Intake</Eyebrow>
         <h1 className="page-title" style={{ marginBottom: 10 }}>Tell us about your product.</h1>
         <p className="body-text" style={{ marginBottom: 32 }}>
           Answer 4 plain-language questions. No LCA expertise needed — the platform handles the technical configuration.
@@ -406,7 +436,7 @@ function Step2({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) => 
   return (
     <div style={{ padding: 40 }}>
       <BackBtn go={go} to="prm" />
-      <Eyebrow>Step 2 of 7 — Data Collection</Eyebrow>
+      <Eyebrow>Data Collection</Eyebrow>
       <h1 className="page-title" style={{ marginBottom: 10 }}>Requests sent to 4 teams.</h1>
       <p className="body-text" style={{ maxWidth: 720, marginBottom: 32 }}>
         ImpactBridge identified who owns each data point and sent them focused request forms. No spreadsheets. No email chains.
@@ -553,7 +583,7 @@ function Step3({ go }: { go: (s: Step) => void }) {
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto", padding: 40 }}>
       <BackBtn go={go} to={2} />
-      <Eyebrow>Step 3 of 7 — AI Gap-Filling</Eyebrow>
+      <Eyebrow>AI Gap-Filling</Eyebrow>
       <h1 className="page-title" style={{ marginBottom: 10 }}>2 inputs are missing. We've filled them.</h1>
       <p className="body-text" style={{ maxWidth: 760, marginBottom: 32 }}>
         Where primary data wasn't available, ImpactBridge used EPA USEEIO benchmark data for Apparel & Textiles. Every estimated field is clearly labeled so you always know what's primary vs. filled.
@@ -641,7 +671,7 @@ function Step4({ go }: { go: (s: Step) => void }) {
       <BackBtn go={go} to={"model"} />
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 28, flexWrap: "wrap", gap: 16 }}>
         <div>
-          <Eyebrow>Step 4 of 7 — Footprint Breakdown</Eyebrow>
+          <Eyebrow>Footprint Breakdown</Eyebrow>
           <h1 className="page-title">Recycled Tote Bag · <span className="tabular">3,240</span> kg CO₂e per unit</h1>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
@@ -772,7 +802,7 @@ function Step5({ setLcaData, go, pushToast }: { setLcaData: (f: (d: LcaData) => 
   return (
     <div style={{ padding: 40 }}>
       <BackBtn go={go} to={4} />
-      <Eyebrow>Step 5 of 7 — Action Queue</Eyebrow>
+      <Eyebrow>Action Queue</Eyebrow>
       <h1 className="page-title" style={{ marginBottom: 10 }}>6 plays. Ranked by impact.</h1>
       <p className="body-text" style={{ maxWidth: 760, marginBottom: 24 }}>
         Every hotspot converted into an ownable action. Each play shows CO₂ savings and dollar impact together.
@@ -911,7 +941,7 @@ function Step6({ setLcaData, go, pushToast }: { setLcaData: (f: (d: LcaData) => 
   return (
     <div style={{ padding: 40 }}>
       <BackBtn go={go} to={4} />
-      <Eyebrow>Step 6 of 7 — Scenario Modeling</Eyebrow>
+      <Eyebrow>Scenario Modeling</Eyebrow>
       <h1 className="page-title" style={{ marginBottom: 10 }}>Swap a material or process. See the delta instantly.</h1>
       <p className="body-text" style={{ maxWidth: 760, marginBottom: 28 }}>
         Test a product decision without rebuilding the LCA. Designed for designers and R&D — iterate in seconds.
@@ -1123,7 +1153,7 @@ function Step7({ lcaData, setLcaData, go, pushToast }: { lcaData: LcaData; setLc
   return (
     <div style={{ maxWidth: 720, margin: "0 auto", padding: 40 }}>
       <BackBtn go={go} to={5} />
-      <Eyebrow>Step 7 of 7 — Assign & Generate</Eyebrow>
+      <Eyebrow>Assign & Generate</Eyebrow>
       <h1 className="page-title" style={{ marginBottom: 10 }}>Turn this play into a sent document.</h1>
       <p className="body-text" style={{ marginBottom: 24 }}>
         Click Generate and ImpactBridge drafts a ready-to-send work artifact using the Claude API. The action does not stop at a recommendation.
@@ -1412,11 +1442,11 @@ function StepModel({ go }: { go: (s: Step) => void }) {
   return (
     <div style={{ padding: 40 }}>
       <BackBtn go={go} to={3} />
-      <StepDots current={4} />
+      
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 8, flexWrap: "wrap", gap: 16 }}>
         <div>
-          <Eyebrow>Step 3.5 · LCA model</Eyebrow>
+          <Eyebrow>LCA Model</Eyebrow>
           <h1 className="page-title">Product system & inventory</h1>
           <p className="body-text" style={{ marginTop: 8, maxWidth: 680 }}>
             Review the unit processes, technosphere links and elementary flows that make up your product system. Drill into any node to inspect inputs, outputs and data sources.
@@ -1723,8 +1753,8 @@ function StepPRM({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) =
   return (
     <div style={{ padding: 40, maxWidth: 1180 }}>
       <BackBtn go={go} to={1} />
-      <StepDots current={1} />
-      <Eyebrow>Step 1.5 — PRM Integration</Eyebrow>
+      
+      <Eyebrow>PRM Integration</Eyebrow>
       <h1 className="page-title" style={{ marginBottom: 10 }}>How we knew who to ask.</h1>
       <p className="body-text" style={{ maxWidth: 720, marginBottom: 28 }}>
         ImpactBridge connects to your partner relationship system to map every data point in the LCA scope to a real person — no spreadsheets, no guessing who owns what.
