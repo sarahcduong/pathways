@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, type ReactNode } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LabelList } from "recharts";
 
 export const Route = createFileRoute("/")({
-  component: ImpactBridgeApp,
+  component: PathwaysApp,
 });
 
 // ─────────────────────────────────────────────────────────────────────
@@ -64,7 +64,7 @@ const I = {
 // Main App Shell
 // ─────────────────────────────────────────────────────────────────────
 
-function ImpactBridgeApp() {
+function PathwaysApp() {
   const [currentStep, setCurrentStep] = useState<Step>(1);
   const [lcaData, setLcaData] = useState<LcaData>({
     productName: "Little Planet™ Organic Sleep & Play (3-Pack)",
@@ -104,7 +104,7 @@ function ImpactBridgeApp() {
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <button onClick={() => go("dashboard")} style={{ fontSize: 17, fontWeight: 600, letterSpacing: "-0.01em" }}>
-            ImpactBridge
+            Pathways
           </button>
           <span style={{ width: 1, height: 18, background: "var(--border-solid)" }} />
           <span style={{ fontSize: 14, color: "var(--text-secondary)" }}>{lcaData.productName}</span>
@@ -409,7 +409,7 @@ function Step1({ lcaData, setLcaData, go }: { lcaData: LcaData; setLcaData: (f: 
           marginTop: 28, padding: 16, background: "var(--green-light)",
           border: "1px solid var(--green-border)", borderRadius: 12, fontSize: 14, lineHeight: 1.7,
         }}>
-          <div style={{ fontWeight: 500, marginBottom: 6 }}>Based on your inputs, ImpactBridge will:</div>
+          <div style={{ fontWeight: 500, marginBottom: 6 }}>Based on your inputs, Pathways will:</div>
           <div>· Set your functional unit to 1 unit of {lcaData.productName}</div>
           <div>· Apply {lcaData.boundary.replace(/-/g, " ")} system boundary</div>
           <div>· Use ecoinvent 3.10 + Higg MSI 3.7 {lcaData.category} emission factors</div>
@@ -445,7 +445,7 @@ function Step2({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) => 
       <Eyebrow>Data Collection</Eyebrow>
       <h1 className="page-title" style={{ marginBottom: 10 }}>Requests sent to 4 teams.</h1>
       <p className="body-text" style={{ maxWidth: 720, marginBottom: 32 }}>
-        ImpactBridge identified who owns each data point and sent them focused request forms. No spreadsheets. No email chains.
+        Pathways identified who owns each data point and sent them focused request forms. No spreadsheets. No email chains.
       </p>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, maxWidth: 1100 }}>
@@ -595,7 +595,7 @@ function Step3({ go }: { go: (s: Step) => void }) {
       <Eyebrow>AI Gap-Filling</Eyebrow>
       <h1 className="page-title" style={{ marginBottom: 10 }}>2 inputs are missing. We've filled them.</h1>
       <p className="body-text" style={{ maxWidth: 760, marginBottom: 32 }}>
-        Where primary data wasn't available, ImpactBridge used ecoinvent 3.10 + Higg MSI 3.7 benchmark data for Babywear · Knit Sleepwear. Every estimated field is clearly labeled so you always know what's primary vs. filled.
+        Where primary data wasn't available, Pathways used ecoinvent 3.10 + Higg MSI 3.7 benchmark data for Babywear · Knit Sleepwear. Every estimated field is clearly labeled so you always know what's primary vs. filled.
       </p>
 
       <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 24 }}>
@@ -626,7 +626,7 @@ function Step3({ go }: { go: (s: Step) => void }) {
           <div className="card">
             <div className="card-title" style={{ marginBottom: 10 }}>About AI-estimated inputs</div>
             <p className="body-text" style={{ fontSize: 14 }}>
-              When team data isn't available yet, ImpactBridge fills gaps using the ecoinvent 3.10 + Higg MSI 3.7 model — the same dataset Fortune 500 companies use for Scope 3 disclosure. Benchmark values are conservative and based on industry averages for your product category and region.
+              When team data isn't available yet, Pathways fills gaps using the ecoinvent 3.10 + Higg MSI 3.7 model — the same dataset Fortune 500 companies use for Scope 3 disclosure. Benchmark values are conservative and based on industry averages for your product category and region.
             </p>
             <p className="body-text" style={{ fontSize: 14, marginTop: 10 }}>
               As your team submits their responses, estimated fields are automatically replaced with primary data. Your LCA accuracy score improves over time.
@@ -1108,7 +1108,7 @@ Product: Little Planet™ Organic Sleep & Play (3-Pack), NB–9M
 SKU: LP-3PSP-NB · Style #225G731
 Current spec: 60% GOTS organic cotton + 40% Lenzing™ EcoVero™ viscose
 Target spec: 100% GOTS organic cotton, 195 GSM interlock, OEKO-TEX Std 100 Class I
-LCA reference: ImpactBridge LCA #LP-2026-3PSP-001
+LCA reference: Pathways LCA #LP-2026-3PSP-001
 
 BACKGROUND
 Aligned to Carter's Raise the Future™ commitments — Sustainably Made, Safe for Kids, and Tough for Play — the sourcing team has completed a lifecycle assessment for the Little Planet™ Organic Sleep & Play (3-Pack). The assessment identifies a single-fiber simplification at our Tier 1 partner Shahi Exports (Unit 8, Bengaluru) that reduces Scope 3.1 emissions by 487 g CO₂e per 3-pack (15% vs. baseline) and lowers landed cost by $0.22 per 3-pack at run-rate volume.
@@ -1129,7 +1129,7 @@ COMMERCIAL
 · Payment: NET 60 against OBL, Carter's standard vendor terms
 
 SUSTAINABILITY CONTEXT
-This change supports Carter's 2030 Scope 3 reduction commitment and the Raise the Future™ goal to expand GOTS-certified organic cotton across the Little Planet™ assortment. LCA modeled in ImpactBridge using ecoinvent 3.10 + Higg MSI 3.7 (South Asia knit garment), PEFCR Apparel & Footwear methodology, ISO 14044 aligned.
+This change supports Carter's 2030 Scope 3 reduction commitment and the Raise the Future™ goal to expand GOTS-certified organic cotton across the Little Planet™ assortment. LCA modeled in Pathways using ecoinvent 3.10 + Higg MSI 3.7 (South Asia knit garment), PEFCR Apparel & Footwear methodology, ISO 14044 aligned.
 
 At 480,000 3-packs / year (Little Planet™ Sleep & Play run rate), this change avoids 234,000 kg CO₂e annually — roughly the footprint of 51 round-trip transatlantic flights.
 
@@ -1177,7 +1177,7 @@ function Step7({ lcaData, setLcaData, go, pushToast }: { lcaData: LcaData; setLc
       <Eyebrow>Assign & Generate</Eyebrow>
       <h1 className="page-title" style={{ marginBottom: 10 }}>Turn this play into a sent document.</h1>
       <p className="body-text" style={{ marginBottom: 24 }}>
-        Click Generate and ImpactBridge drafts a ready-to-send work artifact using the Claude API. The action does not stop at a recommendation.
+        Click Generate and Pathways drafts a ready-to-send work artifact using the Claude API. The action does not stop at a recommendation.
       </p>
 
       <div style={{ padding: 16, background: "var(--green-light)", border: "1px solid var(--green-border)", borderRadius: 12, marginBottom: 28 }}>
@@ -1781,7 +1781,7 @@ function StepPRM({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) =
       <Eyebrow>PRM Integration</Eyebrow>
       <h1 className="page-title" style={{ marginBottom: 10 }}>How we knew who to ask.</h1>
       <p className="body-text" style={{ maxWidth: 720, marginBottom: 28 }}>
-        ImpactBridge connects to your partner relationship system to map every data point in the LCA scope to a real person — no spreadsheets, no guessing who owns what.
+        Pathways connects to your partner relationship system to map every data point in the LCA scope to a real person — no spreadsheets, no guessing who owns what.
       </p>
 
       {/* Connection bar */}
@@ -1874,7 +1874,7 @@ WHERE  AccountId IN :scopedAccounts
 ORDER BY LastActivityDate DESC`}
           </div>
           <div style={{ marginTop: 12, fontSize: 12, color: "var(--text-tertiary)" }}>
-            Query runs against your org. ImpactBridge never writes back.
+            Query runs against your org. Pathways never writes back.
           </div>
         </div>
       </div>
@@ -1919,7 +1919,7 @@ ORDER BY LastActivityDate DESC`}
         marginTop: 28, padding: 16, background: "var(--green-light)",
         border: "1px solid var(--green-border)", borderRadius: 12, fontSize: 14, lineHeight: 1.7,
       }}>
-        <div style={{ fontWeight: 500, marginBottom: 6 }}>Next: ImpactBridge will send each owner a focused request form covering only the data they own.</div>
+        <div style={{ fontWeight: 500, marginBottom: 6 }}>Next: Pathways will send each owner a focused request form covering only the data they own.</div>
         <div style={{ color: "var(--text-secondary)" }}>Forms auto-prefill 38 fields from Salesforce ({lcaData.productName}, BOM, supplier list, site address). Owners only fill what we can't pull automatically.</div>
       </div>
 
