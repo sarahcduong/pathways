@@ -199,6 +199,7 @@ function PathwaysApp() {
           {currentStep === 7 && <Step7 lcaData={lcaData} setLcaData={setLcaData} go={go} pushToast={pushToast} />}
           {currentStep === "dashboard" && <Dashboard go={go} />}
           {currentStep === "library" && <Library go={go} pushToast={pushToast} />}
+          {currentStep === "supplier" && <SupplierUpload go={go} pushToast={pushToast} />}
         </div>
       </main>
 
