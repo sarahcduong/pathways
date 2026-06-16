@@ -405,7 +405,7 @@ function Step2({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) => 
 
   return (
     <div style={{ padding: 40 }}>
-      <BackBtn go={go} to={1} />
+      <BackBtn go={go} to="prm" />
       <Eyebrow>Step 2 of 7 — Data Collection</Eyebrow>
       <h1 className="page-title" style={{ marginBottom: 10 }}>Requests sent to 4 teams.</h1>
       <p className="body-text" style={{ maxWidth: 720, marginBottom: 32 }}>
