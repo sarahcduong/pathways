@@ -77,7 +77,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "ImpactBridge — LCA for product teams" },
+      { title: "Pathways — LCA for product teams" },
       { name: "description", content: "Run a full lifecycle assessment in 7 guided steps. No LCA expertise needed." },
     ],
     links: [
