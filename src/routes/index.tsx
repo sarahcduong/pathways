@@ -167,6 +167,7 @@ function ImpactBridgeApp() {
       }}>
         <div className="fade-in" key={String(currentStep)}>
           {currentStep === 1 && <Step1 lcaData={lcaData} setLcaData={setLcaData} go={go} />}
+          {currentStep === "prm" && <StepPRM lcaData={lcaData} go={go} pushToast={pushToast} />}
           {currentStep === 2 && <Step2 lcaData={lcaData} go={go} pushToast={pushToast} />}
           {currentStep === 3 && <Step3 go={go} />}
           {currentStep === "model" && <StepModel go={go} />}
