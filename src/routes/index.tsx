@@ -165,7 +165,7 @@ function ImpactBridgeApp() {
           <button style={{ width: "100%", textAlign: "left", padding: "8px 12px", borderRadius: 8, fontSize: 14 }}>Settings</button>
           <div style={{ marginTop: 16, padding: "8px 12px" }}>
             <div style={{ fontSize: 14, fontWeight: 500 }}>Alex Johnson</div>
-            <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>Sourcing Lead</div>
+            <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>Sourcing Lead — Carter's, Inc.</div>
           </div>
         </div>
       </aside>
