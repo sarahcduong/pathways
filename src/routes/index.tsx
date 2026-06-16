@@ -168,6 +168,11 @@ function PathwaysApp() {
             fontSize: 14, color: currentStep === "library" ? "var(--green-dark)" : "var(--text-primary)",
             fontWeight: currentStep === "library" ? 500 : 400,
           }}>My LCAs</button>
+          <button onClick={() => go("supplier")} style={{
+            width: "100%", textAlign: "left", padding: "8px 12px", borderRadius: 8,
+            fontSize: 14, color: currentStep === "supplier" ? "var(--green-dark)" : "var(--text-primary)",
+            fontWeight: currentStep === "supplier" ? 500 : 400,
+          }}>Supplier preview</button>
           <button style={{ width: "100%", textAlign: "left", padding: "8px 12px", borderRadius: 8, fontSize: 14 }}>Settings</button>
           <div style={{ marginTop: 16, padding: "8px 12px" }}>
             <div style={{ fontSize: 14, fontWeight: 500 }}>Alex Johnson</div>
