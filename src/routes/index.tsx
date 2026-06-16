@@ -175,6 +175,7 @@ function ImpactBridgeApp() {
         marginLeft: "var(--sidebar-width)", paddingTop: "var(--topbar-height)",
         minHeight: "100vh",
       }}>
+        {showTabs && <TabBar current={currentStep} go={go} />}
         <div className="fade-in" key={String(currentStep)}>
           {currentStep === 1 && <Step1 lcaData={lcaData} setLcaData={setLcaData} go={go} />}
           {currentStep === "prm" && <StepPRM lcaData={lcaData} go={go} pushToast={pushToast} />}
