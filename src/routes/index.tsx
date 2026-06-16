@@ -1922,12 +1922,13 @@ ORDER BY ReportsToId NULLS LAST`}
             <div key={groupName} style={{ marginBottom: 22 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
                 <span className={isExternal ? "chip chip-blue" : "chip chip-green"} style={{ fontSize: 11 }}>
-                  {isExternal ? "External — DocuSign-style request" : "Internal — Carter's HQ"}
+                  {isExternal ? "External vendors — DocuSign-style request" : "Internal Carter's HQ — DocuSign-style request"}
                 </span>
                 <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
-                  {groupOwners.length} {isExternal ? "partners" : "team members"} · {isExternal ? "primary data via signed request form" : "data pulled directly from internal systems"}
+                  {groupOwners.length} {isExternal ? "supplier contacts" : "team members"} · each receives a focused upload form scoped to the data they own
                 </span>
               </div>
+
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
                 {groupOwners.map((o) => (
                   <div key={o.name} className="card card-hover">
