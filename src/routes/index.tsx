@@ -215,33 +215,6 @@ function ImpactBridgeApp() {
 // Shared sub-components
 // ─────────────────────────────────────────────────────────────────────
 
-function StepDots({ current }: { current: number }) {
-  return (
-    <div style={{ display: "flex", justifyContent: "center", gap: 0, marginBottom: 32 }}>
-      {STEP_LABELS.map((label, i) => {
-        const num = i + 1;
-        const done = num < current;
-        const active = num === current;
-        return (
-          <div key={label} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, minWidth: 80 }}>
-            <div style={{
-              width: active ? 10 : 8, height: active ? 10 : 8, borderRadius: "50%",
-              background: done || active ? "var(--green-dark)" : "var(--border-solid)",
-              color: "white", display: "flex", alignItems: "center", justifyContent: "center",
-              transition: "all 180ms ease",
-            }}>
-              {done && <I.check size={10} />}
-            </div>
-            <div style={{
-              fontSize: 11, fontWeight: active ? 600 : 400,
-              color: active ? "var(--text-primary)" : "var(--text-tertiary)",
-            }}>{label}</div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
 function TabBar({ current, go }: { current: Step; go: (s: Step) => void }) {
   return (
