@@ -72,7 +72,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   white-space: nowrap;
 }
 .btn-primary { background: var(--green-dark); color: white; }
-.btn-primary:hover { background: #1f5236; }
+.btn-primary:hover { background: #00005c; }
 .btn-ghost { color: var(--text-secondary); }
 .btn-ghost:hover { background: var(--gray-section); color: var(--text-primary); }
 .btn-outline { border: 1px solid var(--border-solid); color: var(--text-primary); background: var(--surface); }
