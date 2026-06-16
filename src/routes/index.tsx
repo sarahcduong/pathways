@@ -11,7 +11,7 @@ export const Route = createFileRoute("/")({
 // Types & shared state
 // ─────────────────────────────────────────────────────────────────────
 
-type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7 | "dashboard" | "model" | "prm" | "library";
+type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7 | "dashboard" | "model" | "prm" | "library" | "supplier";
 type Toast = { id: number; kind: "success" | "warning" | "info"; text: string };
 
 type LcaData = {
@@ -92,7 +92,7 @@ function PathwaysApp() {
     if (typeof window !== "undefined") window.scrollTo({ top: 0 });
   }
 
-  const showTabs = currentStep !== "dashboard" && currentStep !== "library";
+  const showTabs = currentStep !== "dashboard" && currentStep !== "library" && currentStep !== "supplier";
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
@@ -168,6 +168,11 @@ function PathwaysApp() {
             fontSize: 14, color: currentStep === "library" ? "var(--green-dark)" : "var(--text-primary)",
             fontWeight: currentStep === "library" ? 500 : 400,
           }}>My LCAs</button>
+          <button onClick={() => go("supplier")} style={{
+            width: "100%", textAlign: "left", padding: "8px 12px", borderRadius: 8,
+            fontSize: 14, color: currentStep === "supplier" ? "var(--green-dark)" : "var(--text-primary)",
+            fontWeight: currentStep === "supplier" ? 500 : 400,
+          }}>Supplier preview</button>
           <button style={{ width: "100%", textAlign: "left", padding: "8px 12px", borderRadius: 8, fontSize: 14 }}>Settings</button>
           <div style={{ marginTop: 16, padding: "8px 12px" }}>
             <div style={{ fontSize: 14, fontWeight: 500 }}>Alex Johnson</div>
@@ -194,6 +199,7 @@ function PathwaysApp() {
           {currentStep === 7 && <Step7 lcaData={lcaData} setLcaData={setLcaData} go={go} pushToast={pushToast} />}
           {currentStep === "dashboard" && <Dashboard go={go} />}
           {currentStep === "library" && <Library go={go} pushToast={pushToast} />}
+          {currentStep === "supplier" && <SupplierUpload go={go} pushToast={pushToast} />}
         </div>
       </main>
 
@@ -447,7 +453,7 @@ const REQUESTS: { id: string; icon: ReactNode; title: string; body: string; who:
   { id: "facilities",  group: "internal", icon: <I.factory />,title: "Facilities — Bengaluru",        body: "Per-line equipment efficiency, steam consumption, compressed-air kWh per run",                 who: "Anjali Krishnan · Facilities Manager, Shahi Unit 8 (embed)",sent: "June 13, 2026 at 9:04am", received: "—",                         status: "pending" },
   { id: "logistics",   group: "internal", icon: <I.truck />,  title: "Global Logistics",              body: "Mundra → Savannah lane, container utilization, inbound/outbound freight volumes YTD",          who: "Daniel Reyes · Sr. Manager, Global Logistics",             sent: "June 13, 2026 at 9:04am", received: "June 13, 2026 at 4:08pm",  status: "done"    },
   { id: "dcops",       group: "internal", icon: <I.truck />,  title: "Distribution — Braselton DC",   body: "Warehouse energy use, last-mile carrier mix from Braselton DC",                                who: "Marcus Lee · DC Operations Manager, Braselton GA",         sent: "June 13, 2026 at 9:04am", received: "—",                         status: "pending" },
-  // ── External — vendor contacts via DocuSign-style request (7) ──
+  // ── External — vendor contacts via Pathways Data Request (7) ──
   { id: "shahi",       group: "external", icon: <I.box />,    title: "Tier 1 — Shahi Exports",        body: "Primary material production data, component EPDs, packaging weight",                           who: "Sunil Mehta · Sustainability Lead — Shahi Exports",        sent: "June 13, 2026 at 9:05am", received: "June 14, 2026 at 6:12pm",  status: "done"    },
   { id: "arvind",      group: "external", icon: <I.box />,    title: "Tier 2 Mill — Arvind Limited",  body: "GOTS certificate, dye-house energy, effluent (kg) for the knit fabric",                       who: "Lakshmi Narayanan · EHS Manager — Arvind (Naroda)",        sent: "June 13, 2026 at 9:05am", received: "June 15, 2026 at 9:30am",  status: "done"    },
   { id: "lenzing",     group: "external", icon: <I.box />,    title: "Tier 2 Fiber — Lenzing AG",     body: "EcoVero™ LCA module + FSC chain-of-custody for the 5% viscose blend",                          who: "Klaus Berger · Sustainability Manager — Lenzing AG",       sent: "June 13, 2026 at 9:05am", received: "June 14, 2026 at 1:48pm",  status: "done"    },
@@ -474,7 +480,7 @@ function Step2({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) => 
       <Eyebrow>Data Collection</Eyebrow>
       <h1 className="page-title" style={{ marginBottom: 10 }}>Requests sent to {total} owners.</h1>
       <p className="body-text" style={{ maxWidth: 760, marginBottom: 32 }}>
-        Each of the {total} owners identified via Salesforce — {internalTotal} inside Carter's, {externalTotal} at vendor accounts — received a focused DocuSign-style request scoped to only the data they own. {done} have signed and submitted; {pending} are still outstanding.
+        Each of the {total} owners identified via Salesforce — {internalTotal} inside Carter's, {externalTotal} at vendor accounts — received a focused Pathways Data Request scoped to only the data they own. {done} have signed and submitted; {pending} are still outstanding.
       </p>
 
       {(["internal", "external"] as const).map((g) => {
@@ -516,10 +522,16 @@ function Step2({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) => 
                         View response →
                       </button>
                     ) : (
-                      <button onClick={() => pushToast(`Reminder sent to ${r.who.split(" · ")[0]}`, "info")}
-                        className="btn btn-outline btn-sm" style={{ color: "var(--amber)", borderColor: "var(--amber-border)" }}>
-                        Send reminder →
-                      </button>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        <button onClick={() => pushToast(`Reminder sent to ${r.who.split(" · ")[0]}`, "info")}
+                          className="btn btn-outline btn-sm" style={{ color: "var(--amber)", borderColor: "var(--amber-border)" }}>
+                          Send reminder →
+                        </button>
+                        <button onClick={() => go("supplier")}
+                          className="btn btn-ghost btn-sm" style={{ color: "var(--text-secondary)" }}>
+                          Preview their view ↗
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -1815,14 +1827,14 @@ const PRM_OWNERS = [
   { dept: "Global Logistics", icon: <I.truck />, name: "Daniel Reyes", title: "Sr. Manager, Global Logistics", sfRole: "Shipment Owner — IN→US lanes", group: "Internal · Carter's HQ", queries: ["Shipment__c where Product2 = 'SKU-LP-3PSP-NB'", "Carrier__r.Mode", "Lane__c = 'MUN-SAV'"], why: "Owns Mundra→Savannah outbound shipments and inbound freight volumes for this style YTD" },
   { dept: "Distribution — Braselton DC", icon: <I.truck />, name: "Marcus Lee", title: "DC Operations Manager, Braselton GA", sfRole: "Warehouse Energy Owner", group: "Internal · Carter's HQ", queries: ["Warehouse__c = 'Braselton'", "Warehouse_Energy_kWh__c", "Last_Mile_Carrier__c"], why: "Owns warehousing energy use and last-mile carrier mix from Braselton DC to retail / DTC" },
 
-  // ── External — Tier-1 / Tier-2 / 3PL (DocuSign-style requests) ──
-  { dept: "Tier 1 Supplier", icon: <I.box />, name: "Sunil Mehta", title: "Sustainability Lead — Shahi Exports", sfRole: "External — Vendor Contact", group: "External · DocuSign request", queries: ["Primary_Material_Production_Data__c", "Component_EPDs__c", "Packaging_Weight__c"], why: "Cut-and-sew partner for Style 225G731 — provides primary material data, component EPDs, and packaging weight" },
-  { dept: "Tier 2 Mill", icon: <I.box />, name: "Lakshmi Narayanan", title: "EHS Manager — Arvind Limited (Naroda)", sfRole: "External — Tier-2 Mill Contact", group: "External · DocuSign request", queries: ["GOTS_Certificate__c", "Dye_House_Energy__c", "Effluent_kg__c"], why: "Owns GOTS certificate, dye-house energy, and effluent data for the knit fabric supplied to Shahi" },
-  { dept: "Tier 2 Fiber", icon: <I.box />, name: "Klaus Berger", title: "Sustainability Manager — Lenzing AG", sfRole: "External — EcoVero™ Account", group: "External · DocuSign request", queries: ["EcoVero_LCA_Module__c", "Wood_Pulp_FSC_Chain__c"], why: "Provides EcoVero™ viscose LCA module + FSC chain-of-custody for the 5% blend" },
-  { dept: "Contract Manufacturer", icon: <I.factory />, name: "Aditi Sharma", title: "Plant Manager — Shahi Unit 8 Finishing", sfRole: "External — Toll Mfg Contact", group: "External · DocuSign request", queries: ["Energy_per_Unit_kWh__c", "Scrap_Rate_pct__c", "Coating_Process_Emissions__c"], why: "Runs finishing line — owns per-unit energy, scrap rate, and process-specific emissions (printing, coating)" },
-  { dept: "Trim Supplier", icon: <I.box />, name: "Tomoko Yamada", title: "Account Manager — YKK SNAD (Tirupur)", sfRole: "External — Trim Vendor", group: "External · DocuSign request", queries: ["Snap_Material_Spec__c", "Nickel_Free_Cert__c", "Component_Weight_g__c"], why: "Supplies nickel-free brass snaps — provides component spec, certificate, and weight per garment" },
-  { dept: "3PL — Ocean", icon: <I.truck />, name: "Henrik Sørensen", title: "Account Director — Maersk Spot", sfRole: "External — Carrier Contact", group: "External · DocuSign request", queries: ["Lane_Distance_nm__c", "Vessel_Fuel_Type__c", "TEU_Utilization_pct__c"], why: "Confirms Mundra→Savannah lane distance, fuel mix (VLSFO vs. bio-blend), and TEU utilization" },
-  { dept: "3PL — Inland US", icon: <I.truck />, name: "Carla Mendes", title: "Operations Lead — Schneider National", sfRole: "External — Drayage / Trucking", group: "External · DocuSign request", queries: ["Drayage_Distance_mi__c", "Diesel_Gal_per_Mile__c", "Mode_Mix_Rail_vs_Road__c"], why: "Owns Savannah port → Braselton DC drayage — provides fuel consumption and rail/road mode confirmations" },
+  // ── External — Tier-1 / Tier-2 / 3PL (Pathways Data Requests) ──
+  { dept: "Tier 1 Supplier", icon: <I.box />, name: "Sunil Mehta", title: "Sustainability Lead — Shahi Exports", sfRole: "External — Vendor Contact", group: "External · Data Request", queries: ["Primary_Material_Production_Data__c", "Component_EPDs__c", "Packaging_Weight__c"], why: "Cut-and-sew partner for Style 225G731 — provides primary material data, component EPDs, and packaging weight" },
+  { dept: "Tier 2 Mill", icon: <I.box />, name: "Lakshmi Narayanan", title: "EHS Manager — Arvind Limited (Naroda)", sfRole: "External — Tier-2 Mill Contact", group: "External · Data Request", queries: ["GOTS_Certificate__c", "Dye_House_Energy__c", "Effluent_kg__c"], why: "Owns GOTS certificate, dye-house energy, and effluent data for the knit fabric supplied to Shahi" },
+  { dept: "Tier 2 Fiber", icon: <I.box />, name: "Klaus Berger", title: "Sustainability Manager — Lenzing AG", sfRole: "External — EcoVero™ Account", group: "External · Data Request", queries: ["EcoVero_LCA_Module__c", "Wood_Pulp_FSC_Chain__c"], why: "Provides EcoVero™ viscose LCA module + FSC chain-of-custody for the 5% blend" },
+  { dept: "Contract Manufacturer", icon: <I.factory />, name: "Aditi Sharma", title: "Plant Manager — Shahi Unit 8 Finishing", sfRole: "External — Toll Mfg Contact", group: "External · Data Request", queries: ["Energy_per_Unit_kWh__c", "Scrap_Rate_pct__c", "Coating_Process_Emissions__c"], why: "Runs finishing line — owns per-unit energy, scrap rate, and process-specific emissions (printing, coating)" },
+  { dept: "Trim Supplier", icon: <I.box />, name: "Tomoko Yamada", title: "Account Manager — YKK SNAD (Tirupur)", sfRole: "External — Trim Vendor", group: "External · Data Request", queries: ["Snap_Material_Spec__c", "Nickel_Free_Cert__c", "Component_Weight_g__c"], why: "Supplies nickel-free brass snaps — provides component spec, certificate, and weight per garment" },
+  { dept: "3PL — Ocean", icon: <I.truck />, name: "Henrik Sørensen", title: "Account Director — Maersk Spot", sfRole: "External — Carrier Contact", group: "External · Data Request", queries: ["Lane_Distance_nm__c", "Vessel_Fuel_Type__c", "TEU_Utilization_pct__c"], why: "Confirms Mundra→Savannah lane distance, fuel mix (VLSFO vs. bio-blend), and TEU utilization" },
+  { dept: "3PL — Inland US", icon: <I.truck />, name: "Carla Mendes", title: "Operations Lead — Schneider National", sfRole: "External — Drayage / Trucking", group: "External · Data Request", queries: ["Drayage_Distance_mi__c", "Diesel_Gal_per_Mile__c", "Mode_Mix_Rail_vs_Road__c"], why: "Owns Savannah port → Braselton DC drayage — provides fuel consumption and rail/road mode confirmations" },
 ];
 
 function StepPRM({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) => void; pushToast: (t: string, k?: Toast["kind"]) => void }) {
@@ -1843,7 +1855,7 @@ function StepPRM({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) =
       <Eyebrow>PRM Integration</Eyebrow>
       <h1 className="page-title" style={{ marginBottom: 10 }}>How we knew who to ask.</h1>
       <p className="body-text" style={{ maxWidth: 760, marginBottom: 28 }}>
-        Salesforce is Pathways' source of <em>people</em> — supplier contacts, internal team members, account relationships, and org hierarchy. We use it to find the right named owner at each vendor and inside Carter's (not a generic <span className="mono">sustainability@…</span> alias). Every owner — internal and external — then receives the same DocuSign-style request form to upload the data they own.
+        Salesforce is Pathways' source of <em>people</em> — supplier contacts, internal team members, account relationships, and org hierarchy. We use it to find the right named owner at each vendor and inside Carter's (not a generic <span className="mono">sustainability@…</span> alias). Every owner — internal and external — then receives the same Pathways Data Request form to upload the data they own.
       </p>
 
 
@@ -1955,14 +1967,14 @@ ORDER BY ReportsToId NULLS LAST`}
           </span>
         </div>
 
-        {(["Internal · Carter's HQ", "External · DocuSign request"] as const).map((groupName) => {
+        {(["Internal · Carter's HQ", "External · Data Request"] as const).map((groupName) => {
           const groupOwners = PRM_OWNERS.filter((o) => o.group === groupName);
           const isExternal = groupName.startsWith("External");
           return (
             <div key={groupName} style={{ marginBottom: 22 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
                 <span className={isExternal ? "chip chip-blue" : "chip chip-green"} style={{ fontSize: 11 }}>
-                  {isExternal ? "External vendors — DocuSign-style request" : "Internal Carter's HQ — DocuSign-style request"}
+                  {isExternal ? "External vendors — Pathways Data Request" : "Internal Carter's HQ — Pathways Data Request"}
                 </span>
                 <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
                   {groupOwners.length} {isExternal ? "supplier contacts" : "team members"} · each receives a focused upload form scoped to the data they own
@@ -2008,7 +2020,7 @@ ORDER BY ReportsToId NULLS LAST`}
         marginTop: 28, padding: 16, background: "var(--green-light)",
         border: "1px solid var(--green-border)", borderRadius: 12, fontSize: 14, lineHeight: 1.7,
       }}>
-        <div style={{ fontWeight: 500, marginBottom: 6 }}>Next: every owner gets the same DocuSign-style request — focused on only the data they own.</div>
+        <div style={{ fontWeight: 500, marginBottom: 6 }}>Next: every owner gets the same Pathways Data Request — focused on only the data they own.</div>
         <div style={{ color: "var(--text-secondary)" }}>Pathways pre-fills each form with what Salesforce already knows about the recipient ({lcaData.productName}, their account, their BOM line / facility / lane). Internal owners (Sourcing, Mfg Ops, Logistics, DC) and external suppliers (Shahi, Arvind, Lenzing, YKK, Maersk, Schneider) all sign and submit through the same workflow — one audit trail, one inbox.</div>
       </div>
 
@@ -2367,6 +2379,212 @@ function Library({ go, pushToast }: { go: (s: Step) => void; pushToast: (t: stri
       <div style={{ marginTop: 16, fontSize: 12, color: "var(--text-tertiary)" }}>
         LCAs auto-flag for refresh every 90 days, on Tier-1/Tier-2 vendor change in Salesforce, on a new ZDHC ClearStream cycle, or when a PO repricing event lands.
       </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// SUPPLIER-SIDE VIEW — what Sunil at Shahi Exports sees after email click
+// ─────────────────────────────────────────────────────────────────────
+
+function SupplierUpload({ go, pushToast }: { go: (s: Step) => void; pushToast: (t: string, k?: Toast["kind"]) => void }) {
+  const [step, setStep] = useState<"email" | "form" | "done">("email");
+  const [filled, setFilled] = useState<Record<string, boolean>>({});
+  const [uploaded, setUploaded] = useState<Record<string, string | null>>({ gots: null, energy: null, packaging: null });
+
+  const fields = [
+    { id: "matComp", label: "Primary material composition", help: "Confirm the fabric blend used for Style 225G731 — we've pre-filled from your last submission.", prefill: "60% organic cotton (GOTS) + 40% Lenzing™ EcoVero™ viscose" },
+    { id: "weight",  label: "Component weight (g per garment)", help: "Total fabric weight per piece, excluding trim.", prefill: "112" },
+    { id: "scrap",   label: "Cut-and-sew scrap rate (%)",       help: "Average for this style over the last 90 days.", prefill: "3.4" },
+    { id: "pkgWt",   label: "Packaging weight (g per 3-pack)",  help: "Polybag + hangtag + carton allocation.", prefill: "18" },
+  ];
+  const uploads = [
+    { id: "gots",      label: "GOTS Scope Certificate", hint: "PDF · current cycle" },
+    { id: "energy",    label: "Facility energy log (last 90 days)", hint: "CSV or XLSX · kWh by source" },
+    { id: "packaging", label: "Packaging spec sheet", hint: "PDF or image" },
+  ];
+  const filledCount = Object.values(filled).filter(Boolean).length + Object.values(uploaded).filter(Boolean).length;
+  const totalCount = fields.length + uploads.length;
+  const pct = Math.round((filledCount / totalCount) * 100);
+
+  function fakeUpload(id: string, name: string) {
+    setUploaded((u) => ({ ...u, [id]: name }));
+    pushToast(`${name} uploaded`, "success");
+  }
+
+  return (
+    <div style={{ padding: 40, maxWidth: 980 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+        <button onClick={() => go(2)} className="btn btn-ghost btn-sm">← Back to Pathways (internal view)</button>
+        <span className="chip chip-blue" style={{ fontSize: 11 }}>Demo · External supplier perspective</span>
+      </div>
+
+      <Eyebrow>Supplier preview</Eyebrow>
+      <h1 className="page-title" style={{ marginBottom: 10 }}>What Sunil at Shahi Exports sees.</h1>
+      <p className="body-text" style={{ maxWidth: 720, marginBottom: 28 }}>
+        Walkthrough of the supplier-side flow — from inbox to signed submission. Suppliers never create an account, never install anything, and only ever see the fields they own.
+      </p>
+
+      {/* Stage switcher */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 24, padding: 4, background: "var(--gray-section)", borderRadius: 10, width: "fit-content" }}>
+        {(["email", "form", "done"] as const).map((s) => (
+          <button key={s} onClick={() => setStep(s)} className="btn btn-sm" style={{
+            background: step === s ? "white" : "transparent",
+            color: step === s ? "var(--green-dark)" : "var(--text-secondary)",
+            boxShadow: step === s ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+            fontWeight: 500,
+          }}>
+            {s === "email" ? "1 · Email" : s === "form" ? "2 · Upload form" : "3 · Confirmation"}
+          </button>
+        ))}
+      </div>
+
+      {/* ── STAGE 1: EMAIL ── */}
+      {step === "email" && (
+        <div className="card" style={{ padding: 0, overflow: "hidden", maxWidth: 720 }}>
+          <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--border)", background: "var(--gray-section)", fontSize: 12, color: "var(--text-tertiary)", display: "flex", justifyContent: "space-between" }}>
+            <span>Inbox · sunil.mehta@shahi.co.in</span>
+            <span>June 13, 2026 · 9:05am IST</span>
+          </div>
+          <div style={{ padding: "22px 24px", borderBottom: "1px solid var(--border)" }}>
+            <div style={{ fontSize: 13, color: "var(--text-tertiary)", marginBottom: 6 }}>From <strong style={{ color: "var(--text-primary)" }}>Priya Raghavan</strong> &lt;priya.raghavan@carters.com&gt; via Pathways</div>
+            <div style={{ fontSize: 13, color: "var(--text-tertiary)", marginBottom: 14 }}>Subject: <strong style={{ color: "var(--text-primary)" }}>Data request — Style 225G731 (Little Planet™ 3-Pack Sleep & Play)</strong></div>
+            <p style={{ fontSize: 14, lineHeight: 1.7, marginBottom: 14 }}>Hi Sunil,</p>
+            <p style={{ fontSize: 14, lineHeight: 1.7, marginBottom: 14 }}>
+              We're refreshing the lifecycle assessment for <strong>Style 225G731</strong>, which Shahi cuts and sews at Unit 8. To complete it, I need 4 short data points and 3 documents from your team.
+            </p>
+            <p style={{ fontSize: 14, lineHeight: 1.7, marginBottom: 14 }}>
+              The form is pre-filled with your last submission — most fields just need a quick confirm. Should take <strong>under 10 minutes</strong>. No login or account required.
+            </p>
+            <button onClick={() => setStep("form")} className="btn btn-primary" style={{ marginTop: 6, marginBottom: 16, padding: "12px 22px" }}>
+              Open data request →
+            </button>
+            <p style={{ fontSize: 13, color: "var(--text-tertiary)", lineHeight: 1.6 }}>
+              This link is unique to you and expires June 27. Questions? Reply directly to this email.<br />
+              — Priya
+            </p>
+          </div>
+          <div style={{ padding: "12px 20px", background: "var(--gray-section)", fontSize: 11, color: "var(--text-tertiary)", textAlign: "center" }}>
+            Sent securely via Pathways · pathways.carters.com/r/9F2K-A81P
+          </div>
+        </div>
+      )}
+
+      {/* ── STAGE 2: FORM ── */}
+      {step === "form" && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 280px", gap: 24, alignItems: "start" }}>
+          <div>
+            {/* Branded header */}
+            <div className="card" style={{ padding: 20, marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <div style={{ fontSize: 12, color: "var(--text-tertiary)", marginBottom: 4 }}>Data request from Carter's, Inc.</div>
+                <div style={{ fontWeight: 500, fontSize: 16 }}>Style 225G731 · Little Planet™ 3-Pack Sleep & Play</div>
+                <div style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 2 }}>For Sunil Mehta · Shahi Exports · Unit 8, Bengaluru</div>
+              </div>
+              <span className="chip chip-green" style={{ fontSize: 11 }}>Secure link · expires Jun 27</span>
+            </div>
+
+            {/* Pre-filled fields */}
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div className="card-title" style={{ marginBottom: 4 }}>Confirm 4 data points</div>
+              <div style={{ fontSize: 13, color: "var(--text-tertiary)", marginBottom: 16 }}>
+                Pre-filled from your June 2025 submission. Just edit if anything's changed and check the box to confirm.
+              </div>
+              {fields.map((f) => (
+                <div key={f.id} style={{ paddingTop: 14, paddingBottom: 14, borderTop: "1px solid var(--border)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 6 }}>
+                    <label style={{ fontSize: 14, fontWeight: 500 }}>{f.label}</label>
+                    <label style={{ fontSize: 12, color: "var(--text-tertiary)", display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                      <input type="checkbox" checked={!!filled[f.id]} onChange={(e) => setFilled((s) => ({ ...s, [f.id]: e.target.checked }))} />
+                      Confirm
+                    </label>
+                  </div>
+                  <input className="input" defaultValue={f.prefill} style={{ fontSize: 14 }} />
+                  <div style={{ fontSize: 12, color: "var(--text-tertiary)", marginTop: 6 }}>{f.help}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Upload */}
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div className="card-title" style={{ marginBottom: 4 }}>Attach 3 documents</div>
+              <div style={{ fontSize: 13, color: "var(--text-tertiary)", marginBottom: 16 }}>
+                Drag &amp; drop, or click to browse. PDF, CSV, XLSX, JPG/PNG accepted.
+              </div>
+              {uploads.map((u) => (
+                <div key={u.id} style={{ paddingTop: 14, paddingBottom: 14, borderTop: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 14 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 500 }}>{u.label}</div>
+                    <div style={{ fontSize: 12, color: "var(--text-tertiary)", marginTop: 2 }}>{u.hint}</div>
+                  </div>
+                  {uploaded[u.id] ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span className="chip chip-green" style={{ fontSize: 11 }}>✓ {uploaded[u.id]}</span>
+                      <button className="btn btn-ghost btn-sm" onClick={() => setUploaded((s) => ({ ...s, [u.id]: null }))}>Replace</button>
+                    </div>
+                  ) : (
+                    <button className="btn btn-outline btn-sm" onClick={() => fakeUpload(u.id, u.id === "gots" ? "GOTS_Cert_2026.pdf" : u.id === "energy" ? "Unit8_energy_Q2.csv" : "Pkg_spec_v3.pdf")}>
+                      ↑ Upload file
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Sign + submit */}
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div className="card-title" style={{ marginBottom: 10 }}>Sign &amp; submit</div>
+              <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 12 }}>
+                By submitting, you confirm the data above is accurate to the best of your knowledge. A signed PDF receipt will be emailed to you and to Priya at Carter's.
+              </p>
+              <input className="input" placeholder="Type your full name to sign" style={{ fontSize: 14, marginBottom: 12 }} />
+              <button onClick={() => { setStep("done"); pushToast("Submission received — Pathways notified Priya", "success"); }}
+                className="btn btn-primary" style={{ width: "100%", padding: 14 }}>
+                Submit data request
+              </button>
+            </div>
+          </div>
+
+          {/* Right rail */}
+          <div style={{ position: "sticky", top: 90 }}>
+            <div className="card" style={{ marginBottom: 14 }}>
+              <div className="label" style={{ marginBottom: 8 }}>Progress</div>
+              <div style={{ fontSize: 22, fontWeight: 500, marginBottom: 6 }}>{filledCount}/{totalCount}</div>
+              <div style={{ height: 6, background: "var(--border-solid)", borderRadius: 4, overflow: "hidden", marginBottom: 10 }}>
+                <div style={{ width: `${pct}%`, height: "100%", background: "var(--green-dark)", transition: "width 300ms ease" }} />
+              </div>
+              <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>Est. {Math.max(2, 10 - Math.round(filledCount * 1.2))} min remaining</div>
+            </div>
+            <div className="card" style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.6 }}>
+              <div style={{ fontWeight: 500, color: "var(--text-primary)", marginBottom: 6 }}>Why we're asking</div>
+              Carter's is calculating the lifecycle footprint of Style 225G731 to meet its Raise the Future 2030 commitments. Your data covers the cut &amp; sew stage only — Tier-2 mill data is requested separately from Arvind.
+              <div style={{ borderTop: "1px solid var(--border)", marginTop: 12, paddingTop: 12, fontWeight: 500, color: "var(--text-primary)", marginBottom: 6 }}>Need help?</div>
+              Reply to the email, or chat with Priya at <span className="mono">priya.raghavan@carters.com</span>.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── STAGE 3: DONE ── */}
+      {step === "done" && (
+        <div className="card" style={{ padding: 32, maxWidth: 620, textAlign: "center" }}>
+          <div style={{
+            width: 56, height: 56, borderRadius: "50%", background: "var(--green-light)",
+            color: "var(--green-dark)", display: "flex", alignItems: "center", justifyContent: "center",
+            margin: "0 auto 18px", fontSize: 28,
+          }}>✓</div>
+          <h2 className="section-title" style={{ marginBottom: 8 }}>Thank you, Sunil.</h2>
+          <p className="body-text" style={{ marginBottom: 20 }}>
+            Your submission was received and a signed PDF receipt has been emailed to you and to Priya at Carter's. No further action is needed.
+          </p>
+          <div style={{ background: "var(--gray-section)", padding: 14, borderRadius: 10, fontSize: 13, color: "var(--text-secondary)", textAlign: "left", marginBottom: 18 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0" }}><span>Reference</span><span className="mono">PW-225G731-SHAHI-0613</span></div>
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0" }}><span>Submitted</span><span>June 14, 2026 · 6:12pm IST</span></div>
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0" }}><span>Next refresh</span><span>~Q2 2027 (annual cycle)</span></div>
+          </div>
+          <button onClick={() => setStep("email")} className="btn btn-ghost btn-sm">Replay demo from start</button>
+        </div>
+      )}
     </div>
   );
 }
