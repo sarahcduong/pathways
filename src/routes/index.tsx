@@ -10,7 +10,7 @@ export const Route = createFileRoute("/")({
 // Types & shared state
 // ─────────────────────────────────────────────────────────────────────
 
-type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7 | "dashboard" | "model" | "prm";
+type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7 | "dashboard" | "model" | "prm" | "library";
 type Toast = { id: number; kind: "success" | "warning" | "info"; text: string };
 
 type LcaData = {
