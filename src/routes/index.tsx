@@ -27,6 +27,18 @@ type LcaData = {
 
 const STEP_LABELS = ["Intake", "Data", "AI Fill", "Footprint", "Actions", "Scenario", "Assign"];
 
+const TABS: { id: Step; label: string }[] = [
+  { id: 1, label: "Intake" },
+  { id: "prm", label: "PRM" },
+  { id: 2, label: "Data" },
+  { id: 3, label: "AI Fill" },
+  { id: "model", label: "Model" },
+  { id: 4, label: "Footprint" },
+  { id: 5, label: "Actions" },
+  { id: 6, label: "Scenario" },
+  { id: 7, label: "Assign" },
+];
+
 // ─────────────────────────────────────────────────────────────────────
 // Icons (inline SVG)
 // ─────────────────────────────────────────────────────────────────────
