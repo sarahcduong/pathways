@@ -1476,7 +1476,7 @@ function StepModel({ go }: { go: (s: Step) => void }) {
           </p>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <span className="chip chip-gray">Functional unit · 1 tote bag</span>
+          <span className="chip chip-gray">Functional unit · 1 × 3-pack (336g)</span>
           <span className="chip chip-green">Allocation · mass</span>
           <span className="chip chip-blue">Method · IPCC 2021 GWP100</span>
         </div>
@@ -1549,7 +1549,7 @@ function StepModel({ go }: { go: (s: Step) => void }) {
 
               {/* nodes */}
               <Node id="cotton" x={10} y={40} />
-              <Node id="rpet" x={10} y={140} />
+              <Node id="ecovero" x={10} y={140} />
               <Node id="yarn" x={330} y={120} />
               <Node id="weave" x={330} y={220} />
               <Node id="dye" x={650} y={120} />
