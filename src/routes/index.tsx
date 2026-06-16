@@ -1760,7 +1760,7 @@ const PRM_FIELDS = [
   { sf: "Product2.Raise_The_Future_Pillar__c", maps: "Sustainability pillar tag", val: "Sustainably Made + Safe for Kids", conf: "exact" },
   { sf: "Account.Vendor_Tier__c", maps: "Upstream boundary depth", val: "Tier 1 + Tier 2 (Shahi, Arvind, YKK, Lenzing, Unifi)", conf: "exact" },
   { sf: "Opportunity.Manufacturing_Site__c", maps: "Operations facility", val: "Shahi Exports — Unit 8, Bengaluru, IN", conf: "exact" },
-  { sf: "Contact.Department + Role", maps: "Data owner routing", val: "4 owners auto-identified", conf: "rule" },
+  { sf: "Contact.Department + Role", maps: "Data owner routing", val: "16 owners auto-identified across 9 internal teams + 7 external partners", conf: "rule" },
 ];
 
 const PRM_OWNERS = [
