@@ -1925,11 +1925,8 @@ function StepPRM({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) =
                       </div>
                       <span className={isExternal ? "chip chip-blue" : "chip chip-gray"} style={{ fontSize: 10 }}>{o.sfRole}</span>
                     </div>
-                    <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 10, fontStyle: "italic" }}>
-                      Why this person: {o.why}
-                    </div>
                     <div style={{ borderTop: "1px solid var(--border)", paddingTop: 10 }}>
-                      <div className="label" style={{ marginBottom: 6 }}>Sourced from</div>
+                      <div className="label" style={{ marginBottom: 6 }}>Deliverables needed:</div>
                       {o.queries.map((q) => (
                         <div key={q} className="mono" style={{ fontSize: 11, color: "var(--text-secondary)", padding: "2px 0" }}>· {q}</div>
                       ))}
