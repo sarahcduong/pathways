@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, useRef, type ReactNode } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LabelList } from "recharts";
+import pathwaysLogo from "@/assets/pathwayslogo.png.asset.json";
 
 export const Route = createFileRoute("/")({
   component: PathwaysApp,
