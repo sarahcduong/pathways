@@ -1802,9 +1802,10 @@ function StepPRM({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) =
       
       <Eyebrow>PRM Integration</Eyebrow>
       <h1 className="page-title" style={{ marginBottom: 10 }}>How we knew who to ask.</h1>
-      <p className="body-text" style={{ maxWidth: 720, marginBottom: 28 }}>
-        Pathways connects to your partner relationship system to map every data point in the LCA scope to a real person — no spreadsheets, no guessing who owns what.
+      <p className="body-text" style={{ maxWidth: 760, marginBottom: 28 }}>
+        Salesforce is Pathways' source of <em>people</em> — supplier contacts, internal team members, account relationships, and org hierarchy. We use it to find the right named owner at each vendor and inside Carter's (not a generic <span className="mono">sustainability@…</span> alias). Every owner — internal and external — then receives the same DocuSign-style request form to upload the data they own.
       </p>
+
 
       {/* Connection bar */}
       <div className="card" style={{ padding: 18, marginBottom: 24, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
