@@ -522,10 +522,16 @@ function Step2({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) => 
                         View response →
                       </button>
                     ) : (
-                      <button onClick={() => pushToast(`Reminder sent to ${r.who.split(" · ")[0]}`, "info")}
-                        className="btn btn-outline btn-sm" style={{ color: "var(--amber)", borderColor: "var(--amber-border)" }}>
-                        Send reminder →
-                      </button>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        <button onClick={() => pushToast(`Reminder sent to ${r.who.split(" · ")[0]}`, "info")}
+                          className="btn btn-outline btn-sm" style={{ color: "var(--amber)", borderColor: "var(--amber-border)" }}>
+                          Send reminder →
+                        </button>
+                        <button onClick={() => go("supplier")}
+                          className="btn btn-ghost btn-sm" style={{ color: "var(--text-secondary)" }}>
+                          Preview their view ↗
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
