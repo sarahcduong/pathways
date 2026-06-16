@@ -243,6 +243,52 @@ function StepDots({ current }: { current: number }) {
   );
 }
 
+function TabBar({ current, go }: { current: Step; go: (s: Step) => void }) {
+  return (
+    <div style={{
+      position: "sticky", top: "var(--topbar-height)", zIndex: 40,
+      background: "rgba(255,255,255,0.92)", backdropFilter: "blur(8px)",
+      borderBottom: "1px solid var(--border)",
+      padding: "0 40px",
+    }}>
+      <div style={{ display: "flex", gap: 2, overflowX: "auto", minHeight: 48, alignItems: "stretch" }}>
+        {TABS.map((t) => {
+          const active = t.id === current;
+          return (
+            <button
+              key={String(t.id)}
+              onClick={() => go(t.id)}
+              style={{
+                position: "relative", padding: "0 16px",
+                fontSize: 13, fontWeight: active ? 600 : 500,
+                color: active ? "var(--text-primary)" : "var(--text-secondary)",
+                whiteSpace: "nowrap", transition: "color 160ms ease",
+                display: "flex", alignItems: "center", gap: 8,
+              }}
+              onMouseEnter={(e) => { if (!active) e.currentTarget.style.color = "var(--text-primary)"; }}
+              onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = "var(--text-secondary)"; }}
+            >
+              <span style={{
+                width: 6, height: 6, borderRadius: "50%",
+                background: active ? "var(--green-dark)" : "var(--border-solid)",
+              }} />
+              {t.label}
+              {active && (
+                <span style={{
+                  position: "absolute", left: 8, right: 8, bottom: -1,
+                  height: 2, background: "var(--green-dark)", borderRadius: 2,
+                }} />
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function StepDots() { return null; }
+
 function Eyebrow({ children }: { children: ReactNode }) {
   return <div className="label" style={{ marginBottom: 12 }}>{children}</div>;
 }
