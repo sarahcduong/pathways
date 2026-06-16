@@ -1755,12 +1755,12 @@ function FlowTable({ rows, cols }: { rows: FlowRow[]; cols: string[] }) {
 // ─────────────────────────────────────────────────────────────────────
 
 const PRM_FIELDS = [
-  { sf: "Account.Brand__c", maps: "Carter's brand portfolio", val: "Little Planet™ (Carter's, Inc.)", conf: "exact" },
-  { sf: "Product2.Family", maps: "Functional unit basis", val: "Little Planet™ Organic Sleep & Play (3-Pack) · Style 225G731", conf: "exact" },
-  { sf: "Product2.Raise_The_Future_Pillar__c", maps: "Sustainability pillar tag", val: "Sustainably Made + Safe for Kids", conf: "exact" },
-  { sf: "Account.Vendor_Tier__c", maps: "Upstream boundary depth", val: "Tier 1 + Tier 2 (Shahi, Arvind, YKK, Lenzing, Unifi)", conf: "exact" },
-  { sf: "Opportunity.Manufacturing_Site__c", maps: "Operations facility", val: "Shahi Exports — Unit 8, Bengaluru, IN", conf: "exact" },
-  { sf: "Contact.Department + Role", maps: "Data owner routing", val: "16 owners auto-identified across 9 internal teams + 7 external partners", conf: "rule" },
+  { sf: "Account (Vendor) → Account.Parent", maps: "Account relationships — who supplies what", val: "11 vendor accounts linked to Style 225G731 BOM (Shahi, Arvind, Lenzing, YKK, Maersk…)", conf: "exact" },
+  { sf: "Contact (External) where AccountId IN :vendors", maps: "Supplier contacts — named person per vendor, not a generic inbox", val: "7 named supplier contacts (Sustainability, EHS, Plant Mgr, Account Director)", conf: "exact" },
+  { sf: "User + Contact (Internal) where Department IN (…)", maps: "Internal team members — procurement, ops, logistics owners", val: "9 Carter's HQ owners (Sourcing, Procurement, Mfg Ops, Facilities, Logistics, DC)", conf: "exact" },
+  { sf: "Contact.ReportsToId chain", maps: "Org hierarchy — right person vs. generic role inbox", val: "Resolved to individual owner at each vendor (skipped 4 shared aliases)", conf: "exact" },
+  { sf: "AccountContactRelation.Roles", maps: "Account ↔ material/component coverage", val: "Maps each contact to the BOM line they own (fabric, trim, fiber, freight)", conf: "rule" },
+  { sf: "Contact.Last_Verified_At__c", maps: "Contact freshness — avoids bouncing emails", val: "16/16 contacts verified in last 90 days", conf: "rule" },
 ];
 
 const PRM_OWNERS = [
