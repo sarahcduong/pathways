@@ -1573,15 +1573,15 @@ function StepModel({ go }: { go: (s: Step) => void }) {
               <button className="btn btn-ghost btn-sm">Fit</button>
             </div>
           </div>
-          <div style={{ position: "relative", height: 460 }}>
+          <div style={{ position: "relative", height: 640 }}>
             {/* grid */}
-            <svg width="100%" height="100%" viewBox="0 0 880 460" style={{ display: "block" }}>
+            <svg width="100%" height="100%" viewBox="0 0 880 640" style={{ display: "block" }}>
               <defs>
                 <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
                   <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#EFEFEA" strokeWidth="0.5" />
                 </pattern>
               </defs>
-              <rect width="880" height="460" fill="url(#grid)" />
+              <rect width="880" height="640" fill="url(#grid)" />
 
               {/* arrows */}
               <Arrow x1={194} y1={70} x2={330} y2={140} label="0.20 kg cotton" />
