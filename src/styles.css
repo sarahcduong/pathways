@@ -95,7 +95,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   transition: border-color 180ms ease, box-shadow 180ms ease;
   font-size: 15px;
 }
-.input:focus { outline: none; border-color: var(--green-dark); box-shadow: 0 0 0 3px rgba(44,107,69,0.1); }
+.input:focus { outline: none; border-color: var(--green-dark); box-shadow: 0 0 0 3px rgba(0,0,128,0.12); }
 
 @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 .fade-in { animation: fadeIn 300ms ease; }
