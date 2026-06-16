@@ -301,7 +301,7 @@ function Step1({ lcaData, setLcaData, go }: { lcaData: LcaData; setLcaData: (f: 
     <div style={{ maxWidth: 640, margin: "0 auto", padding: "48px 24px" }}>
       
       <div className="card">
-        <Eyebrow>Step 1 of 7 — LCA Intake</Eyebrow>
+        <Eyebrow>LCA Intake</Eyebrow>
         <h1 className="page-title" style={{ marginBottom: 10 }}>Tell us about your product.</h1>
         <p className="body-text" style={{ marginBottom: 32 }}>
           Answer 4 plain-language questions. No LCA expertise needed — the platform handles the technical configuration.
@@ -436,7 +436,7 @@ function Step2({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) => 
   return (
     <div style={{ padding: 40 }}>
       <BackBtn go={go} to="prm" />
-      <Eyebrow>Step 2 of 7 — Data Collection</Eyebrow>
+      <Eyebrow>Data Collection</Eyebrow>
       <h1 className="page-title" style={{ marginBottom: 10 }}>Requests sent to 4 teams.</h1>
       <p className="body-text" style={{ maxWidth: 720, marginBottom: 32 }}>
         ImpactBridge identified who owns each data point and sent them focused request forms. No spreadsheets. No email chains.
@@ -583,7 +583,7 @@ function Step3({ go }: { go: (s: Step) => void }) {
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto", padding: 40 }}>
       <BackBtn go={go} to={2} />
-      <Eyebrow>Step 3 of 7 — AI Gap-Filling</Eyebrow>
+      <Eyebrow>AI Gap-Filling</Eyebrow>
       <h1 className="page-title" style={{ marginBottom: 10 }}>2 inputs are missing. We've filled them.</h1>
       <p className="body-text" style={{ maxWidth: 760, marginBottom: 32 }}>
         Where primary data wasn't available, ImpactBridge used EPA USEEIO benchmark data for Apparel & Textiles. Every estimated field is clearly labeled so you always know what's primary vs. filled.
@@ -671,7 +671,7 @@ function Step4({ go }: { go: (s: Step) => void }) {
       <BackBtn go={go} to={"model"} />
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 28, flexWrap: "wrap", gap: 16 }}>
         <div>
-          <Eyebrow>Step 4 of 7 — Footprint Breakdown</Eyebrow>
+          <Eyebrow>Footprint Breakdown</Eyebrow>
           <h1 className="page-title">Recycled Tote Bag · <span className="tabular">3,240</span> kg CO₂e per unit</h1>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
@@ -802,7 +802,7 @@ function Step5({ setLcaData, go, pushToast }: { setLcaData: (f: (d: LcaData) => 
   return (
     <div style={{ padding: 40 }}>
       <BackBtn go={go} to={4} />
-      <Eyebrow>Step 5 of 7 — Action Queue</Eyebrow>
+      <Eyebrow>Action Queue</Eyebrow>
       <h1 className="page-title" style={{ marginBottom: 10 }}>6 plays. Ranked by impact.</h1>
       <p className="body-text" style={{ maxWidth: 760, marginBottom: 24 }}>
         Every hotspot converted into an ownable action. Each play shows CO₂ savings and dollar impact together.
@@ -941,7 +941,7 @@ function Step6({ setLcaData, go, pushToast }: { setLcaData: (f: (d: LcaData) => 
   return (
     <div style={{ padding: 40 }}>
       <BackBtn go={go} to={4} />
-      <Eyebrow>Step 6 of 7 — Scenario Modeling</Eyebrow>
+      <Eyebrow>Scenario Modeling</Eyebrow>
       <h1 className="page-title" style={{ marginBottom: 10 }}>Swap a material or process. See the delta instantly.</h1>
       <p className="body-text" style={{ maxWidth: 760, marginBottom: 28 }}>
         Test a product decision without rebuilding the LCA. Designed for designers and R&D — iterate in seconds.
@@ -1153,7 +1153,7 @@ function Step7({ lcaData, setLcaData, go, pushToast }: { lcaData: LcaData; setLc
   return (
     <div style={{ maxWidth: 720, margin: "0 auto", padding: 40 }}>
       <BackBtn go={go} to={5} />
-      <Eyebrow>Step 7 of 7 — Assign & Generate</Eyebrow>
+      <Eyebrow>Assign & Generate</Eyebrow>
       <h1 className="page-title" style={{ marginBottom: 10 }}>Turn this play into a sent document.</h1>
       <p className="body-text" style={{ marginBottom: 24 }}>
         Click Generate and ImpactBridge drafts a ready-to-send work artifact using the Claude API. The action does not stop at a recommendation.
@@ -1446,7 +1446,7 @@ function StepModel({ go }: { go: (s: Step) => void }) {
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 8, flexWrap: "wrap", gap: 16 }}>
         <div>
-          <Eyebrow>Step 3.5 · LCA model</Eyebrow>
+          <Eyebrow>LCA Model</Eyebrow>
           <h1 className="page-title">Product system & inventory</h1>
           <p className="body-text" style={{ marginTop: 8, maxWidth: 680 }}>
             Review the unit processes, technosphere links and elementary flows that make up your product system. Drill into any node to inspect inputs, outputs and data sources.
@@ -1754,7 +1754,7 @@ function StepPRM({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) =
     <div style={{ padding: 40, maxWidth: 1180 }}>
       <BackBtn go={go} to={1} />
       
-      <Eyebrow>Step 1.5 — PRM Integration</Eyebrow>
+      <Eyebrow>PRM Integration</Eyebrow>
       <h1 className="page-title" style={{ marginBottom: 10 }}>How we knew who to ask.</h1>
       <p className="body-text" style={{ maxWidth: 720, marginBottom: 28 }}>
         ImpactBridge connects to your partner relationship system to map every data point in the LCA scope to a real person — no spreadsheets, no guessing who owns what.
