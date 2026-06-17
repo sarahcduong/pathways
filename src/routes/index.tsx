@@ -3226,10 +3226,6 @@ function Library({ go, pushToast }: { go: (s: Step) => void; pushToast: (t: stri
 
   const open = openId ? LCA_LIBRARY.find((r) => r.id === openId) ?? null : null;
 
-  const completed = LCA_LIBRARY.filter((r) => r.status === "Completed").length;
-  const stale = LCA_LIBRARY.filter((r) => r.status === "Needs refresh").length;
-  const totalReduction = LCA_LIBRARY.reduce((s, r) => s + (r.baseline - r.footprint), 0);
-
   function rerun(r: LcaRecord) {
     pushToast(`Re-running ${r.product} with refreshed Tier-1/Tier-2 data; new version queued`, "info");
     setOpenId(null);
@@ -3249,22 +3245,6 @@ function Library({ go, pushToast }: { go: (s: Step) => void; pushToast: (t: stri
           </p>
         </div>
         <button onClick={() => go(1)} className="btn btn-primary">+ Start a new LCA</button>
-      </div>
-
-      {/* Stat strip */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
-        {[
-          { l: "Total LCAs", v: String(LCA_LIBRARY.length), c: `${completed} completed · ${stale} need refresh` },
-          { l: "Cumulative CO₂e identified", v: `${(totalReduction / 1000).toFixed(1)} kg`, c: "per unit, all styles" },
-          { l: "Avg. data accuracy", v: `${Math.round(LCA_LIBRARY.reduce((s, r) => s + r.accuracy, 0) / LCA_LIBRARY.length)}%`, c: "primary vs. gap-filled" },
-          { l: "Refresh due", v: String(stale), c: stale > 0 ? "Re-run with current vendor data" : "All LCAs current", color: stale > 0 ? "var(--amber-dark)" : undefined as any },
-        ].map((s, i) => (
-          <div key={i} className="card">
-            <div className="label" style={{ marginBottom: 12 }}>{s.l}</div>
-            <div className="num-medium" style={{ color: (s as any).color }}>{s.v}</div>
-            <div style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 4 }}>{s.c}</div>
-          </div>
-        ))}
       </div>
 
       {/* Filter row */}
