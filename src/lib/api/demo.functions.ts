@@ -1,12 +1,21 @@
-import { createServerFn } from "@tanstack/react-start";
-import { z } from "zod";
+import { postNetlifyFunction } from "./netlify-client";
 
-import { sendDataRequestDemoEmail } from "../email.server";
+type SendEmailResult = { ok: true; id: string; recipient: string };
 
-export const sendDataRequestEmails = createServerFn({ method: "POST" })
-  .validator(z.object({ productName: z.string().optional() }))
-  .handler(async ({ data }) => {
-    // Demo sends one email to Sarah only · PRM owner addresses are display-only in the UI.
-    const result = await sendDataRequestDemoEmail(data.productName ?? "");
-    return { sent: true, emailId: result.id, recipient: "sarahcduong@gmail.com" };
+export async function sendDataRequestEmails({
+  data,
+}: {
+  data: {
+    productName?: string;
+    contact?: { name?: string; email?: string };
+    deliverables?: Array<{ title?: string; name?: string } | string>;
+  };
+}) {
+  const result = await postNetlifyFunction<SendEmailResult>("send-email", {
+    productName: data.productName ?? "",
+    contact: data.contact,
+    deliverables: data.deliverables,
   });
+
+  return { sent: true as const, emailId: result.id, recipient: result.recipient };
+}

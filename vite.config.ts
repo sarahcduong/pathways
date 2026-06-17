@@ -4,8 +4,21 @@
 //     componentTagger (dev-only), VITE_* env injection, @ path alias, React/TanStack dedupe,
 //     error logger plugins, and sandbox detection (port/host/strictPort).
 // You can pass additional config via defineConfig({ vite: { ... }, etc... }) if needed.
-import netlify from "@netlify/vite-plugin-tanstack-start";
+import { createRequire } from "node:module";
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
+import { netlifyFunctionsDev } from "./vite/netlify-functions-dev";
+
+const require = createRequire(import.meta.url);
+
+function loadNetlifyPlugin() {
+  try {
+    return require("@netlify/vite-plugin-tanstack-start").default();
+  } catch {
+    return null;
+  }
+}
+
+const netlifyPlugin = loadNetlifyPlugin();
 
 export default defineConfig({
   tanstackStart: {
@@ -14,6 +27,6 @@ export default defineConfig({
     server: { entry: "server" },
   },
   vite: {
-    plugins: [netlify()],
+    plugins: [netlifyFunctionsDev(), ...(netlifyPlugin ? [netlifyPlugin] : [])],
   },
 });
