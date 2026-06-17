@@ -12,9 +12,6 @@ function applyLocalEnv(mode: string, root: string) {
       process.env[key] = value;
     }
   }
-  if (!process.env.ANTHROPIC_API_KEY && process.env.CLAUDE_API_KEY) {
-    process.env.ANTHROPIC_API_KEY = process.env.CLAUDE_API_KEY;
-  }
 }
 
 async function readRequestBody(req: IncomingMessage): Promise<Buffer | undefined> {

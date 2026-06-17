@@ -1,7 +1,7 @@
 const CLAUDE_MODEL = "claude-sonnet-4-6";
 
 function getApiKey() {
-  return process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY;
+  return process.env.CLAUDE_API_KEY;
 }
 
 export function parseJsonFromClaude(text) {
@@ -14,7 +14,7 @@ export function parseJsonFromClaude(text) {
 export async function callClaude(prompt, maxTokens = 4096) {
   const apiKey = getApiKey();
   if (!apiKey) {
-    throw new Error("ANTHROPIC_API_KEY is not configured");
+    throw new Error("CLAUDE_API_KEY is not configured");
   }
 
   const response = await fetch("https://api.anthropic.com/v1/messages", {

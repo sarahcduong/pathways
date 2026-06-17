@@ -19,7 +19,7 @@ import process from "node:process";
 export function getServerConfig() {
   return {
     nodeEnv: process.env.NODE_ENV,
-    claudeApiKey: process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY,
+    claudeApiKey: process.env.CLAUDE_API_KEY,
     climatiqApiKey: process.env.CLIMATIQ_API_KEY,
     resendApiKey: process.env.RESEND_API_KEY,
   };
