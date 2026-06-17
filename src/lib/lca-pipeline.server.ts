@@ -153,6 +153,7 @@ Tasks:
 3. Score each impact category: climate change (GWP), water deprivation, energy demand (include renewableTotal and nonRenewableTotal in MJ), eutrophication, acidification, human toxicity.
 4. Estimate non-GWP categories based on product type since Climatiq primarily returns CO2e.
 5. Mark each category and hotspot source as "verified" if mostly based on Climatiq factors, otherwise "ai_estimated".
+6. Hotspot notes must be short (about half the length of a typical paragraph · one sentence, ≤12 words).
 
 Return JSON:
 {
@@ -180,7 +181,7 @@ Return JSON:
       "badge": "Materials|Manufacturing|Logistics",
       "badgeColor": "green|amber|blue",
       "title": "string",
-      "note": "string",
+      "note": "string · max 12 words, one crisp insight, no preamble",
       "source": "verified|ai_estimated",
       "impacts": {
         "climate": "string",
@@ -232,7 +233,7 @@ Keep play text to one concise sentence (about 8–14 words). For each interventi
 - owner: short owner role (1-2 words)
 - effort: Low|Med|High
 - star: true if it saves both carbon and money
-- impactScores: object with estimated reduction per category (climate, water, energy, eutrophication, acidification, toxicity) — negative = improvement
+- impactScores: object with estimated reduction per category (climate, water, energy, eutrophication, acidification, toxicity) · negative = improvement
 
 Return JSON: { "plays": [ ... ] }`,
     4096,

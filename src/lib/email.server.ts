@@ -7,7 +7,7 @@ export async function sendDataRequestDemoEmail(productName: string): Promise<{ o
     throw new Error("RESEND_API_KEY is not configured");
   }
 
-  const subject = `Pathways data request — ${productName || "Style 225G731"}`;
+  const subject = `Pathways data request: ${productName || "Style 225G731"}`;
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; color: #1a1a18;">
       <p style="font-size: 13px; color: #6b6b65; margin: 0 0 8px;">Pathways · Carter's Inc.</p>
@@ -18,7 +18,7 @@ export async function sendDataRequestDemoEmail(productName: string): Promise<{ o
       </p>
       <p style="font-size: 14px; line-height: 1.5; color: #444;">
         This demo queued <strong>16 scoped upload forms</strong> (9 internal Carter's teams + 7 external vendor contacts)
-        via Salesforce PRM routing — no emails were sent to those contacts. A single summary was sent to the demo recipient only.
+        via Salesforce PRM routing · no emails were sent to those contacts. A single summary was sent to the demo recipient only.
       </p>
       <p style="margin: 24px 0;">
         <a href="https://pathways.carters.com/request/demo"

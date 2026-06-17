@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, useRef, type ReactNode } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LabelList } from "recharts";
 import pathwaysLogo from "@/assets/pathwayslogo.png";
+import sleepAndPlayImg from "@/assets/sleepandplay.webp";
 import { calculateScenario, getActionRecommendations, runProductIntake } from "@/lib/api/lca.functions";
 import { sendDataRequestEmails } from "@/lib/api/demo.functions";
 import { buildFallbackFootprint, INTAKE_API_TIMEOUT_MS } from "@/lib/intake-fallback";
@@ -53,6 +54,8 @@ type LcaData = {
   pipelineError: string | null;
   actionsStatus: "idle" | "loading" | "ready" | "error";
   scenarioStatus: "idle" | "loading" | "ready" | "error";
+  footprintCalculating: boolean;
+  reminderCounts: Record<string, number>;
 };
 
 function toIntakeInput(d: LcaData) {
@@ -74,12 +77,12 @@ function toIntakeInput(d: LcaData) {
   };
 }
 
-function LoadingPanel({ label }: { label: string }) {
+function LoadingPanel({ label, detail }: { label: string; detail?: string }) {
   return (
     <div className="card" style={{ padding: 48, textAlign: "center", marginTop: 24 }}>
       <span className="spinner" style={{ marginBottom: 16, borderTopColor: "var(--green-dark)" }} />
       <div style={{ fontWeight: 500, marginBottom: 6 }}>{label}</div>
-      <div style={{ fontSize: 13, color: "var(--text-tertiary)" }}>Calling Claude and Climatiq — this may take a moment.</div>
+      {detail && <div style={{ fontSize: 13, color: "var(--text-tertiary)" }}>{detail}</div>}
     </div>
   );
 }
@@ -155,6 +158,8 @@ function PathwaysApp() {
     pipelineError: null,
     actionsStatus: "idle",
     scenarioStatus: "idle",
+    footprintCalculating: false,
+    reminderCounts: {},
   });
   const [toasts, setToasts] = useState<Toast[]>([]);
   const toastIdRef = useRef(0);
@@ -281,7 +286,7 @@ function PathwaysApp() {
           <button style={{ width: "100%", textAlign: "left", padding: "8px 12px", borderRadius: 8, fontSize: 14 }}>Settings</button>
           <div style={{ marginTop: 16, padding: "8px 12px" }}>
             <div style={{ fontSize: 14, fontWeight: 500 }}>Alex Johnson</div>
-            <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>Sourcing Lead — Carter's, Inc.</div>
+            <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>Sourcing Lead at Carter's, Inc.</div>
           </div>
         </div>
       </aside>
@@ -296,9 +301,9 @@ function PathwaysApp() {
         <div className="fade-in" key={String(currentStep)}>
           {currentStep === 1 && <Step1 lcaData={lcaData} setLcaData={setLcaData} go={go} pushToast={pushToast} />}
           {currentStep === "prm" && <StepPRM lcaData={lcaData} go={go} pushToast={pushToast} />}
-          {currentStep === 2 && <Step2 lcaData={lcaData} go={go} pushToast={pushToast} />}
+          {currentStep === 2 && <Step2 lcaData={lcaData} setLcaData={setLcaData} go={go} pushToast={pushToast} />}
           {currentStep === 3 && <Step3 go={go} />}
-          {currentStep === "model" && <StepModel go={go} />}
+          {currentStep === "model" && <StepModel go={go} setLcaData={setLcaData} />}
           {currentStep === 4 && <Step4 lcaData={lcaData} go={go} />}
           {currentStep === 5 && <Step5 lcaData={lcaData} setLcaData={setLcaData} go={go} pushToast={pushToast} />}
           {currentStep === 6 && <Step6 lcaData={lcaData} setLcaData={setLcaData} go={go} pushToast={pushToast} />}
@@ -394,14 +399,16 @@ function BackBtn({ go, to }: { go: (s: Step) => void; to: Step }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// STEP 1 — INTAKE
+// STEP 1: INTAKE
 // ─────────────────────────────────────────────────────────────────────
 
 function Step1({ lcaData, setLcaData, go, pushToast }: { lcaData: LcaData; setLcaData: (f: (d: LcaData) => LcaData) => void; go: (s: Step) => void; pushToast: (t: string, k?: Toast["kind"]) => void }) {
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [productSearchOpen, setProductSearchOpen] = useState(false);
+  const [plmLoading, setPlmLoading] = useState(false);
   const productSearchRef = useRef<HTMLDivElement>(null);
+  const plmLoadTimerRef = useRef<number | null>(null);
   const productMatches = filterCartersProducts(lcaData.productName);
   const categories = [
     ...new Set([
@@ -438,19 +445,36 @@ function Step1({ lcaData, setLcaData, go, pushToast }: { lcaData: LcaData; setLc
 
   function selectProduct(product: CartersProduct) {
     const isDemoProduct = product.id === LP001_DEMO_ID;
+    if (plmLoadTimerRef.current) window.clearTimeout(plmLoadTimerRef.current);
+
     setLcaData((d) => ({
       ...d,
       productName: product.name,
       sku: product.sku,
       category: formatCartersCategory(product),
-      primaryMaterial: isDemoProduct ? "Organic Cotton (GOTS Certified)" : "",
-      countryOfManufacture: isDemoProduct ? "Bangladesh" : "",
-      productWeight: isDemoProduct ? "0.4 lbs" : "",
+      primaryMaterial: "",
+      countryOfManufacture: "",
+      productWeight: "",
     }));
     setProductSearchOpen(false);
-    if (isDemoProduct) {
-      pushToast("Product specs loaded from Carter's PLM", "success");
+
+    if (!isDemoProduct) {
+      setPlmLoading(false);
+      return;
     }
+
+    setPlmLoading(true);
+    plmLoadTimerRef.current = window.setTimeout(() => {
+      setLcaData((d) => ({
+        ...d,
+        primaryMaterial: "Organic Cotton (GOTS Certified)",
+        countryOfManufacture: "Bangladesh",
+        productWeight: "0.4 lbs",
+      }));
+      setPlmLoading(false);
+      pushToast("Product specs loaded from Carter's PLM", "success");
+      plmLoadTimerRef.current = null;
+    }, 1000);
   }
 
   useEffect(() => {
@@ -460,7 +484,10 @@ function Step1({ lcaData, setLcaData, go, pushToast }: { lcaData: LcaData; setLc
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      if (plmLoadTimerRef.current) window.clearTimeout(plmLoadTimerRef.current);
+    };
   }, []);
 
   async function handleStartLca() {
@@ -494,7 +521,7 @@ function Step1({ lcaData, setLcaData, go, pushToast }: { lcaData: LcaData; setLc
     const timeoutId = window.setTimeout(() => {
       complete(
         buildFallbackFootprint(),
-        "Showing estimated emission factors — live analysis still running",
+        "Showing estimated emission factors; live analysis still running",
         "info",
       );
     }, INTAKE_API_TIMEOUT_MS);
@@ -517,7 +544,7 @@ function Step1({ lcaData, setLcaData, go, pushToast }: { lcaData: LcaData; setLc
       if (!settled) {
         const message = error instanceof Error ? error.message : "Analysis failed";
         setLcaData((d) => ({ ...d, pipelineStatus: "error", pipelineError: message }));
-        pushToast("Analysis failed — check API keys and try again", "warning");
+        pushToast("Analysis failed. Check API keys and try again", "warning");
         setSubmitting(false);
       }
     }
@@ -530,17 +557,19 @@ function Step1({ lcaData, setLcaData, go, pushToast }: { lcaData: LcaData; setLc
         <Eyebrow>LCA Intake</Eyebrow>
         <h1 className="page-title" style={{ marginBottom: 10 }}>Tell us about your product.</h1>
         <p className="body-text" style={{ marginBottom: 32 }}>
-          Four quick questions — Pathways handles the technical setup.
+          Four quick questions. Pathways handles the technical setup.
         </p>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-          {/* F1 — product search */}
+          {/* F1: product search */}
           <div ref={productSearchRef} style={{ position: "relative" }}>
             <label className="label" style={{ display: "block", marginBottom: 8 }}>Product name</label>
             <input
               className="input"
               value={lcaData.productName}
               onChange={(e) => {
+                if (plmLoadTimerRef.current) window.clearTimeout(plmLoadTimerRef.current);
+                setPlmLoading(false);
                 setLcaData((d) => ({
                   ...d,
                   productName: e.target.value,
@@ -587,7 +616,7 @@ function Step1({ lcaData, setLcaData, go, pushToast }: { lcaData: LcaData; setLc
                 background: "white", border: "1px solid var(--border-solid)", borderRadius: 10,
                 padding: "14px", fontSize: 13, color: "var(--text-tertiary)", zIndex: 30,
               }}>
-                No matching Carter's products — you can still enter a custom name.
+                No matching Carter's products; you can still enter a custom name.
               </div>
             )}
           </div>
@@ -599,30 +628,51 @@ function Step1({ lcaData, setLcaData, go, pushToast }: { lcaData: LcaData; setLc
             </div>
           )}
 
-          {(lcaData.primaryMaterial || lcaData.countryOfManufacture || lcaData.productWeight) && (
+          {plmLoading && (
+            <div className="card" style={{ padding: 16, background: "var(--green-light)", border: "1px solid var(--green-border)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 14, color: "var(--text-secondary)" }}>
+                <span className="spinner" style={{ borderTopColor: "var(--green-dark)" }} />
+                Loading from Carter's PLM…
+              </div>
+            </div>
+          )}
+
+          {!plmLoading && (lcaData.primaryMaterial || lcaData.countryOfManufacture || lcaData.productWeight) && (
             <div className="card" style={{ padding: 16, background: "var(--green-light)", border: "1px solid var(--green-border)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
                 <span className="chip chip-green" style={{ fontSize: 11 }}>Loaded from Carter's PLM</span>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-                {lcaData.primaryMaterial && (
-                  <div>
-                    <div className="label" style={{ marginBottom: 4 }}>Primary material</div>
-                    <div style={{ fontSize: 14, fontWeight: 500 }}>{lcaData.primaryMaterial}</div>
-                  </div>
-                )}
-                {lcaData.countryOfManufacture && (
-                  <div>
-                    <div className="label" style={{ marginBottom: 4 }}>Country of manufacture</div>
-                    <div style={{ fontSize: 14, fontWeight: 500 }}>{lcaData.countryOfManufacture}</div>
-                  </div>
-                )}
-                {lcaData.productWeight && (
-                  <div>
-                    <div className="label" style={{ marginBottom: 4 }}>Product weight</div>
-                    <div style={{ fontSize: 14, fontWeight: 500 }}>{lcaData.productWeight}</div>
-                  </div>
-                )}
+              <div style={{ display: "grid", gridTemplateColumns: "112px 1fr", gap: 16, alignItems: "start" }}>
+                <div style={{
+                  borderRadius: 10, overflow: "hidden", background: "white",
+                  border: "1px solid var(--green-border)", aspectRatio: "1",
+                }}>
+                  <img
+                    src={sleepAndPlayImg}
+                    alt={lcaData.productName || "Product image from Carter's PLM"}
+                    style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                  />
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                  {lcaData.primaryMaterial && (
+                    <div>
+                      <div className="label" style={{ marginBottom: 4 }}>Primary material</div>
+                      <div style={{ fontSize: 14, fontWeight: 500 }}>{lcaData.primaryMaterial}</div>
+                    </div>
+                  )}
+                  {lcaData.countryOfManufacture && (
+                    <div>
+                      <div className="label" style={{ marginBottom: 4 }}>Country of manufacture</div>
+                      <div style={{ fontSize: 14, fontWeight: 500 }}>{lcaData.countryOfManufacture}</div>
+                    </div>
+                  )}
+                  {lcaData.productWeight && (
+                    <div>
+                      <div className="label" style={{ marginBottom: 4 }}>Product weight</div>
+                      <div style={{ fontSize: 14, fontWeight: 500 }}>{lcaData.productWeight}</div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -709,7 +759,7 @@ function Step1({ lcaData, setLcaData, go, pushToast }: { lcaData: LcaData; setLc
 
 
         <button onClick={handleStartLca} className="btn btn-primary" style={{ width: "100%", marginTop: 24, padding: "14px" }} disabled={submitting}>
-          {submitting ? <><span className="spinner" style={{ borderTopColor: "white" }} /> Pulling relevant people from PRM…</> : "Connect PRM & start LCA →"}
+          {submitting ? <><span className="spinner" style={{ borderTopColor: "white" }} /> Setting up your LCA…</> : "Connect PRM & start LCA →"}
         </button>
         {lcaData.pipelineStatus === "error" && (
           <div style={{ marginTop: 12, fontSize: 13, color: "var(--amber)" }}>{lcaData.pipelineError}</div>
@@ -720,41 +770,46 @@ function Step1({ lcaData, setLcaData, go, pushToast }: { lcaData: LcaData; setLc
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// STEP 2 — DATA COLLECTION
+// STEP 2: DATA COLLECTION
 // ─────────────────────────────────────────────────────────────────────
 
 type RequestStatus = "done" | "pending";
 const REQUESTS: { id: string; icon: ReactNode; title: string; body: string; who: string; sent: string; received: string; status: RequestStatus; group: "internal" | "external" }[] = [
-  // ── Internal — Carter's HQ (9) ──
+  // Internal · Carter's HQ (9)
   { id: "pm",          group: "internal", icon: <I.box />,    title: "Product Management",            body: "BOM, product weight/dimensions, compliance deadlines, supplier contact list",                  who: "Alex Johnson · Sr. Product Manager, Little Planet™",       sent: "June 13, 2026 at 9:04am", received: "June 13, 2026 at 11:42am", status: "done"    },
   { id: "design",      group: "internal", icon: <I.pencil />, title: "Design & Product Development",  body: "Material % composition, GSM, snap & trim spec, wash-cycle durability, end-of-life design",     who: "Megan O'Connell · Senior Designer, Little Planet™",        sent: "June 13, 2026 at 9:04am", received: "June 14, 2026 at 10:17am", status: "done"    },
-  { id: "rd",          group: "internal", icon: <I.pencil />, title: "R&D / Engineering",             body: "Process specs (knit, dye, finish), packaging design, disassembly index",                       who: "Wei Zhang · Textile R&D Engineer",                         sent: "June 13, 2026 at 9:04am", received: "—",                         status: "pending" },
-  { id: "sourcing",    group: "internal", icon: <I.box />,    title: "Sourcing — Babywear",           body: "Tier 1 + Tier 2 vendor list, fabric spec contracts, supplier locations, inbound freight",      who: "Priya Raghavan · Director, Sourcing — Babywear",           sent: "June 13, 2026 at 9:04am", received: "June 13, 2026 at 2:31pm",  status: "done"    },
-  { id: "procurement", group: "internal", icon: <I.box />,    title: "Procurement — Trims & Packaging", body: "Trim & packaging POs (YKK, Avery Dennison FSC), inbound packaging materials",                 who: "Hannah Park · Procurement Manager, Trims & Packaging",     sent: "June 13, 2026 at 9:04am", received: "June 14, 2026 at 8:55am",  status: "done"    },
-  { id: "mfgops",      group: "internal", icon: <I.factory />,title: "Manufacturing Ops",             body: "Tier 1 facility energy mix, water use, waste manifests, ZDHC ClearStream",                     who: "Rakesh Iyer · Mfg Ops Lead, India South",                  sent: "June 13, 2026 at 9:04am", received: "—",                         status: "pending" },
-  { id: "facilities",  group: "internal", icon: <I.factory />,title: "Facilities — Bengaluru",        body: "Per-line equipment efficiency, steam consumption, compressed-air kWh per run",                 who: "Anjali Krishnan · Facilities Manager, Shahi Unit 8 (embed)",sent: "June 13, 2026 at 9:04am", received: "—",                         status: "pending" },
+  { id: "rd",          group: "internal", icon: <I.pencil />, title: "R&D / Engineering",             body: "Process specs (knit, dye, finish), packaging design, disassembly index",                       who: "Wei Zhang · Textile R&D Engineer",                         sent: "June 13, 2026 at 9:04am", received: "-",                         status: "pending" },
+  { id: "sourcing",    group: "internal", icon: <I.box />,    title: "Sourcing, Babywear",           body: "Tier 1 + Tier 2 vendor list, fabric spec contracts, supplier locations, inbound freight",      who: "Priya Raghavan · Director, Sourcing, Babywear",           sent: "June 13, 2026 at 9:04am", received: "June 13, 2026 at 2:31pm",  status: "done"    },
+  { id: "procurement", group: "internal", icon: <I.box />,    title: "Procurement, Trims & Packaging", body: "Trim & packaging POs (YKK, Avery Dennison FSC), inbound packaging materials",                 who: "Hannah Park · Procurement Manager, Trims & Packaging",     sent: "June 13, 2026 at 9:04am", received: "June 14, 2026 at 8:55am",  status: "done"    },
+  { id: "mfgops",      group: "internal", icon: <I.factory />,title: "Manufacturing Ops",             body: "Tier 1 facility energy mix, water use, waste manifests, ZDHC ClearStream",                     who: "Rakesh Iyer · Mfg Ops Lead, India South",                  sent: "June 13, 2026 at 9:04am", received: "-",                         status: "pending" },
+  { id: "facilities",  group: "internal", icon: <I.factory />,title: "Facilities, Bengaluru",        body: "Per-line equipment efficiency, steam consumption, compressed-air kWh per run",                 who: "Anjali Krishnan · Facilities Manager, Shahi Unit 8 (embed)",sent: "June 13, 2026 at 9:04am", received: "-",                         status: "pending" },
   { id: "logistics",   group: "internal", icon: <I.truck />,  title: "Global Logistics",              body: "Mundra → Savannah lane, container utilization, inbound/outbound freight volumes YTD",          who: "Daniel Reyes · Sr. Manager, Global Logistics",             sent: "June 13, 2026 at 9:04am", received: "June 13, 2026 at 4:08pm",  status: "done"    },
-  { id: "dcops",       group: "internal", icon: <I.truck />,  title: "Distribution — Braselton DC",   body: "Warehouse energy use, last-mile carrier mix from Braselton DC",                                who: "Marcus Lee · DC Operations Manager, Braselton GA",         sent: "June 13, 2026 at 9:04am", received: "—",                         status: "pending" },
-  // ── External — vendor contacts via Pathways Data Request (7) ──
-  { id: "shahi",       group: "external", icon: <I.box />,    title: "Tier 1 — Shahi Exports",        body: "Primary material production data, component EPDs, packaging weight",                           who: "Sunil Mehta · Sustainability Lead — Shahi Exports",        sent: "June 13, 2026 at 9:05am", received: "June 14, 2026 at 6:12pm",  status: "done"    },
-  { id: "arvind",      group: "external", icon: <I.box />,    title: "Tier 2 Mill — Arvind Limited",  body: "GOTS certificate, dye-house energy, effluent (kg) for the knit fabric",                       who: "Lakshmi Narayanan · EHS Manager — Arvind (Naroda)",        sent: "June 13, 2026 at 9:05am", received: "June 15, 2026 at 9:30am",  status: "done"    },
-  { id: "lenzing",     group: "external", icon: <I.box />,    title: "Tier 2 Fiber — Lenzing AG",     body: "EcoVero™ LCA module + FSC chain-of-custody for the 5% viscose blend",                          who: "Klaus Berger · Sustainability Manager — Lenzing AG",       sent: "June 13, 2026 at 9:05am", received: "June 14, 2026 at 1:48pm",  status: "done"    },
-  { id: "shahi-fin",   group: "external", icon: <I.factory />,title: "Contract Mfg — Shahi Unit 8 Finishing", body: "Per-unit energy (kWh), scrap rate, coating/printing process emissions",                  who: "Aditi Sharma · Plant Manager — Shahi Unit 8 Finishing",    sent: "June 13, 2026 at 9:05am", received: "—",                         status: "pending" },
-  { id: "ykk",         group: "external", icon: <I.box />,    title: "Trim Supplier — YKK SNAD",      body: "Snap material spec, nickel-free certificate, component weight per garment",                    who: "Tomoko Yamada · Account Manager — YKK SNAD (Tirupur)",     sent: "June 13, 2026 at 9:05am", received: "June 13, 2026 at 11:05pm", status: "done"    },
-  { id: "maersk",      group: "external", icon: <I.truck />,  title: "3PL Ocean — Maersk Spot",       body: "Mundra → Savannah lane distance, vessel fuel mix (VLSFO vs. bio-blend), TEU utilization",      who: "Henrik Sørensen · Account Director — Maersk Spot",         sent: "June 13, 2026 at 9:05am", received: "—",                         status: "pending" },
-  { id: "schneider",   group: "external", icon: <I.truck />,  title: "3PL Inland — Schneider National", body: "Savannah → Braselton drayage distance, diesel gal/mile, rail vs. road mode mix",             who: "Carla Mendes · Operations Lead — Schneider National",      sent: "June 13, 2026 at 9:05am", received: "—",                         status: "pending" },
+  { id: "dcops",       group: "internal", icon: <I.truck />,  title: "Distribution, Braselton DC",   body: "Warehouse energy use, last-mile carrier mix from Braselton DC",                                who: "Marcus Lee · DC Operations Manager, Braselton GA",         sent: "June 13, 2026 at 9:04am", received: "-",                         status: "pending" },
+  // External · vendor contacts via Pathways Data Request (7)
+  { id: "shahi",       group: "external", icon: <I.box />,    title: "Tier 1: Shahi Exports",        body: "Primary material production data, component EPDs, packaging weight",                           who: "Sunil Mehta · Sustainability Lead, Shahi Exports",        sent: "June 13, 2026 at 9:05am", received: "June 14, 2026 at 6:12pm",  status: "done"    },
+  { id: "arvind",      group: "external", icon: <I.box />,    title: "Tier 2 Mill: Arvind Limited",  body: "GOTS certificate, dye-house energy, effluent (kg) for the knit fabric",                       who: "Lakshmi Narayanan · EHS Manager, Arvind (Naroda)",        sent: "June 13, 2026 at 9:05am", received: "June 15, 2026 at 9:30am",  status: "done"    },
+  { id: "lenzing",     group: "external", icon: <I.box />,    title: "Tier 2 Fiber: Lenzing AG",     body: "EcoVero™ LCA module + FSC chain-of-custody for the 5% viscose blend",                          who: "Klaus Berger · Sustainability Manager, Lenzing AG",       sent: "June 13, 2026 at 9:05am", received: "June 14, 2026 at 1:48pm",  status: "done"    },
+  { id: "shahi-fin",   group: "external", icon: <I.factory />,title: "Contract Mfg: Shahi Unit 8 Finishing", body: "Per-unit energy (kWh), scrap rate, coating/printing process emissions",                  who: "Aditi Sharma · Plant Manager, Shahi Unit 8 Finishing",    sent: "June 13, 2026 at 9:05am", received: "-",                         status: "pending" },
+  { id: "ykk",         group: "external", icon: <I.box />,    title: "Trim Supplier: YKK SNAD",      body: "Snap material spec, nickel-free certificate, component weight per garment",                    who: "Tomoko Yamada · Account Manager, YKK SNAD (Tirupur)",     sent: "June 13, 2026 at 9:05am", received: "June 13, 2026 at 11:05pm", status: "done"    },
+  { id: "maersk",      group: "external", icon: <I.truck />,  title: "3PL Ocean: Maersk Spot",       body: "Mundra → Savannah lane distance, vessel fuel mix (VLSFO vs. bio-blend), TEU utilization",      who: "Henrik Sørensen · Account Director, Maersk Spot",         sent: "June 13, 2026 at 9:05am", received: "-",                         status: "pending" },
+  { id: "schneider",   group: "external", icon: <I.truck />,  title: "3PL Inland: Schneider National", body: "Savannah → Braselton drayage distance, diesel gal/mile, rail vs. road mode mix",             who: "Carla Mendes · Operations Lead, Schneider National",      sent: "June 13, 2026 at 9:05am", received: "-",                         status: "pending" },
 ];
 
 
-function Step2({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) => void; pushToast: (t: string, k?: Toast["kind"]) => void }) {
+function Step2({ lcaData, setLcaData, go, pushToast }: { lcaData: LcaData; setLcaData: (f: (d: LcaData) => LcaData) => void; go: (s: Step) => void; pushToast: (t: string, k?: Toast["kind"]) => void }) {
   const [modalOpen, setModalOpen] = useState(false);
   const total = REQUESTS.length;
   const done = REQUESTS.filter((r) => r.status === "done").length;
   const pending = total - done;
-  const internalDone = REQUESTS.filter((r) => r.group === "internal" && r.status === "done").length;
-  const externalDone = REQUESTS.filter((r) => r.group === "external" && r.status === "done").length;
-  const internalTotal = REQUESTS.filter((r) => r.group === "internal").length;
-  const externalTotal = REQUESTS.filter((r) => r.group === "external").length;
+
+  function sendReminder(requestId: string, ownerName: string) {
+    const nextCount = (lcaData.reminderCounts[requestId] ?? 0) + 1;
+    setLcaData((d) => ({
+      ...d,
+      reminderCounts: { ...d.reminderCounts, [requestId]: nextCount },
+    }));
+    pushToast(`Reminder ${nextCount} sent to ${ownerName}`, "info");
+  }
 
   return (
     <div style={{ padding: 40 }}>
@@ -763,14 +818,13 @@ function Step2({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) => 
       <h1 className="page-title" style={{ marginBottom: 10 }}>Requests sent to {total} owners.</h1>
       <div style={{ maxWidth: 1100, marginBottom: 32 }}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-          <span style={{ fontSize: 14, fontWeight: 500 }}>{done} of {total} responses received · waiting on {pending}</span>
+          <span style={{ fontSize: 14, fontWeight: 500 }}>
+            {done} of {total} responses received · waiting on {pending}
+          </span>
           <span style={{ fontSize: 13, color: "var(--text-tertiary)" }}>{Math.round((done / total) * 100)}%</span>
         </div>
         <div style={{ height: 6, background: "var(--border-solid)", borderRadius: 4, overflow: "hidden" }}>
           <div style={{ width: `${(done / total) * 100}%`, height: "100%", background: "var(--green-dark)", transition: "width 400ms ease" }} />
-        </div>
-        <div style={{ marginTop: 10, fontSize: 13, color: "var(--text-secondary)" }}>
-          Internal: {internalDone}/{internalTotal} · External: {externalDone}/{externalTotal}. Gaps filled from industry benchmarks.
         </div>
       </div>
 
@@ -778,19 +832,21 @@ function Step2({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) => 
         const items = REQUESTS.filter((r) => r.group === g);
         const groupDone = items.filter((r) => r.status === "done").length;
         const isInternal = g === "internal";
-        const isExternal = g === "external";
         return (
           <div key={g} style={{ marginBottom: 28 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, maxWidth: 1100 }}>
               <span className={isInternal ? "chip chip-green" : "chip chip-blue"} style={{ fontSize: 11 }}>
-                {isInternal ? "Internal — Carter's HQ" : "External — vendor accounts"}
+                {isInternal ? "Internal · Carter's HQ" : "External · vendor accounts"}
               </span>
               <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
-                {groupDone} of {items.length} responses · {isExternal ? "vendor contacts" : "HQ teams"}
+                {groupDone} of {items.length} responses
               </span>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, maxWidth: 1100 }}>
-              {items.map((r) => (
+              {items.map((r) => {
+                const reminders = lcaData.reminderCounts[r.id] ?? 0;
+                const ownerName = r.who.split(" · ")[0];
+                return (
                 <div key={r.id} className="card card-hover">
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -806,6 +862,9 @@ function Step2({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) => 
                     <div><span className="label" style={{ marginRight: 6 }}>Owner</span> {r.who}</div>
                     <div><span className="label" style={{ marginRight: 6 }}>Sent</span> {r.sent}</div>
                     <div><span className="label" style={{ marginRight: 6 }}>Received</span> {r.received}</div>
+                    {r.status === "pending" && (
+                      <div><span className="label" style={{ marginRight: 6 }}>Reminders</span> {reminders} sent</div>
+                    )}
                   </div>
                   <div style={{ marginTop: 16, borderTop: "1px solid var(--border)", paddingTop: 14 }}>
                     {r.status === "done" ? (
@@ -815,9 +874,9 @@ function Step2({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) => 
                       </button>
                     ) : (
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        <button onClick={() => pushToast(`Reminder sent to ${r.who.split(" · ")[0]}`, "info")}
+                        <button onClick={() => sendReminder(r.id, ownerName)}
                           className="btn btn-outline btn-sm" style={{ color: "var(--amber)", borderColor: "var(--amber-border)" }}>
-                          Send reminder →
+                          {reminders > 0 ? `Send reminder (${reminders} sent) →` : "Send reminder →"}
                         </button>
                         <button onClick={() => go("supplier")}
                           className="btn btn-ghost btn-sm" style={{ color: "var(--text-secondary)" }}>
@@ -827,7 +886,8 @@ function Step2({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) => 
                     )}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         );
@@ -835,14 +895,14 @@ function Step2({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) => 
 
       <div style={{ display: "flex", gap: 10, marginTop: 28 }}>
         <button onClick={() => go(3)} className="btn btn-primary">Continue with available data →</button>
-        <button onClick={() => pushToast(`Waiting on ${pending} owners — reminders queued for tomorrow 9am`, "info")} className="btn btn-ghost">
+        <button onClick={() => pushToast(`Waiting on ${pending} owners; reminders queued for tomorrow 9am`, "info")} className="btn btn-ghost">
           Wait for all responses
         </button>
       </div>
 
 
       {modalOpen && (
-        <Modal onClose={() => setModalOpen(false)} title="Sourcing Response — Priya Raghavan"
+        <Modal onClose={() => setModalOpen(false)} title="Sourcing Response · Priya Raghavan"
           subtitle="Received June 13, 2026 at 2:31pm · Auto-populated into LCA">
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
             <thead>
@@ -856,12 +916,12 @@ function Step2({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) => 
               {[
                 ["Fabric blend", "60% organic cotton (GOTS) + 40% Lenzing™ EcoVero™ viscose", "Supplier cert"],
                 ["Garment weight", "112g per piece · 336g per 3-pack", "Tech pack v4.1"],
-                ["Tier 1 cut & sew", "Shahi Exports — Unit 8, Bengaluru, IN", "Vendor registry"],
-                ["Tier 2 fabric mill", "Arvind Limited — Naroda, Ahmedabad, IN", "Vendor registry"],
+                ["Tier 1 cut & sew", "Shahi Exports, Unit 8, Bengaluru, IN", "Vendor registry"],
+                ["Tier 2 fabric mill", "Arvind Limited, Naroda, Ahmedabad, IN", "Vendor registry"],
                 ["FOB cost / 3-pack", "$4.62", "PO #CT-2026-08841"],
-                ["GOTS certified", "Yes — Scope Certificate #GOTS-IN-9182", "Control Union"],
+                ["GOTS certified", "Yes: Scope Certificate #GOTS-IN-9182", "Control Union"],
                 ["OEKO-TEX Std 100", "Class I (suitable for infants)", "Cert #21.HIN.55812"],
-                ["Snap component", "Nickel-free brass, YKK SNAD — Tirupur, IN", "Tech pack"],
+                ["Snap component", "Nickel-free brass, YKK SNAD, Tirupur, IN", "Tech pack"],
               ].map(([f, v, s], i) => (
                 <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}>
                   <td style={{ padding: "12px 8px", fontWeight: 500 }}>{f}</td>
@@ -901,42 +961,134 @@ function Modal({ children, onClose, title, subtitle }: { children: ReactNode; on
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// STEP 3 — GAP FILL
+// STEP 3: GAP FILL
 // ─────────────────────────────────────────────────────────────────────
 
-const AI_FILL_ROWS: { field: string; value: string; source: "Default" | "Primary" | "Estimated" }[] = [
-  { field: "Product name", value: "Little Planet™ Organic Sleep & Play (3-Pack)", source: "Default" },
-  { field: "Category", value: "Babywear · Knit Sleepwear", source: "Default" },
-  { field: "Functional unit", value: "1 unit (340g)", source: "Default" },
-  { field: "System boundary", value: "Cradle to gate", source: "Default" },
-  { field: "Fabric blend", value: "60% GOTS organic cotton + 40% Lenzing™ EcoVero™ viscose", source: "Primary" },
-  { field: "Garment weight", value: "336g per 3-pack", source: "Primary" },
-  { field: "FOB cost / 3-pack", value: "$4.62", source: "Primary" },
-  { field: "Tier 1 cut & sew", value: "Shahi Exports — Unit 8, Bengaluru, IN", source: "Primary" },
-  { field: "Tier 2 fabric mill", value: "Arvind Limited — Naroda, IN", source: "Primary" },
-  { field: "GOTS / OEKO-TEX", value: "GOTS Scope Cert + OEKO-TEX Class I", source: "Primary" },
-  { field: "Manufacturing energy", value: "2.8 kWh / 3-pack", source: "Estimated" },
-  { field: "Transport distance", value: "13,800 km sea (Mundra → Savannah)", source: "Estimated" },
-  { field: "Facility energy mix", value: "India South grid (0.71 kgCO₂e/kWh)", source: "Estimated" },
+type FillRow = { field: string; value: string; source: "Default" | "Primary" | "Estimated" };
+type FillGroup = { id: string; label: string; rows: FillRow[] };
+
+const AI_FILL_GROUPS: FillGroup[] = [
+  {
+    id: "scope",
+    label: "Goal & scope",
+    rows: [
+      { field: "Product name", value: "Little Planet™ Organic Sleep & Play (3-Pack)", source: "Default" },
+      { field: "SKU / style", value: "LP-3PSP-NB · Style #225G731", source: "Default" },
+      { field: "Category", value: "Babywear · Knit Sleepwear", source: "Default" },
+      { field: "Functional unit", value: "1 unit (112g per piece · 336g per 3-pack)", source: "Default" },
+      { field: "System boundary", value: "Cradle to gate", source: "Default" },
+      { field: "Allocation method", value: "Physical (mass)", source: "Default" },
+      { field: "Reference year", value: "2026", source: "Default" },
+      { field: "Geography", value: "IN production · US consumption", source: "Default" },
+      { field: "Impact method", value: "PEFCR Apparel · ReCiPe 2016 Midpoint", source: "Default" },
+    ],
+  },
+  {
+    id: "materials",
+    label: "Materials & BOM",
+    rows: [
+      { field: "Fabric blend", value: "60% GOTS organic cotton + 40% Lenzing™ EcoVero™ viscose", source: "Primary" },
+      { field: "Fabric GSM", value: "180 GSM single jersey interlock", source: "Primary" },
+      { field: "Yarn count", value: "30/1 combed ring-spun organic cotton", source: "Primary" },
+      { field: "Garment weight", value: "112g per piece · 336g per 3-pack", source: "Primary" },
+      { field: "Cotton origin", value: "Gujarat, IN (GOTS Scope Cert #GOTS-IN-9182)", source: "Primary" },
+      { field: "Viscose supplier", value: "Lenzing AG · EcoVero™ (FSC chain of custody)", source: "Primary" },
+      { field: "Trim, snaps", value: "Nickel-free brass YKK SNAD · 4.2g per garment", source: "Primary" },
+      { field: "Thread & label", value: "100% organic cotton thread · woven cotton label", source: "Primary" },
+      { field: "BOM line items", value: "14 components (fabric, trims, packaging)", source: "Primary" },
+    ],
+  },
+  {
+    id: "manufacturing",
+    label: "Manufacturing",
+    rows: [
+      { field: "Tier 1 cut & sew", value: "Shahi Exports, Unit 8, Bengaluru, IN", source: "Primary" },
+      { field: "Tier 2 fabric mill", value: "Arvind Limited, Naroda, Ahmedabad, IN", source: "Primary" },
+      { field: "Knit process", value: "Circular knit · 28 gauge", source: "Primary" },
+      { field: "Dye process", value: "Reactive dye · cold-pad batch", source: "Primary" },
+      { field: "Finish process", value: "Softener + enzyme wash · OEKO-TEX Class I", source: "Primary" },
+      { field: "Production volume", value: "480,000 units / year (run rate)", source: "Primary" },
+      { field: "Manufacturing energy", value: "2.8 kWh / 3-pack", source: "Estimated" },
+      { field: "Process water", value: "42 L / 3-pack (knit + dye + finish)", source: "Estimated" },
+      { field: "Wastewater effluent", value: "38 L / 3-pack · ZDHC Level 3", source: "Estimated" },
+      { field: "Scrap rate", value: "4.2% cut-and-sew · 1.8% finishing", source: "Estimated" },
+    ],
+  },
+  {
+    id: "energy",
+    label: "Energy & utilities",
+    rows: [
+      { field: "Facility energy mix", value: "India South grid (0.71 kgCO₂e/kWh)", source: "Estimated" },
+      { field: "Steam consumption", value: "0.6 kg steam / garment (dye house)", source: "Estimated" },
+      { field: "Compressed air", value: "0.04 kWh / garment (finishing line)", source: "Estimated" },
+      { field: "Renewable on-site", value: "0% (no PPA at Unit 8; pilot planned)", source: "Estimated" },
+    ],
+  },
+  {
+    id: "logistics",
+    label: "Logistics & distribution",
+    rows: [
+      { field: "Ocean lane", value: "Mundra, IN → Savannah, GA", source: "Primary" },
+      { field: "Port of export", value: "Mundra · ICD Bengaluru drayage", source: "Primary" },
+      { field: "Port of import", value: "Savannah · Schneider drayage to Braselton DC", source: "Primary" },
+      { field: "Transport distance", value: "13,800 km sea + 280 mi inland", source: "Estimated" },
+      { field: "Container utilization", value: "82% TEU fill (consolidated weekly)", source: "Estimated" },
+      { field: "Last-mile mode", value: "67% truck · 33% rail from Braselton DC", source: "Estimated" },
+      { field: "FOB cost / 3-pack", value: "$4.62", source: "Primary" },
+    ],
+  },
+  {
+    id: "packaging",
+    label: "Packaging",
+    rows: [
+      { field: "Primary pack", value: "FSC hangtag + belly band (no polybag)", source: "Primary" },
+      { field: "Hangtag material", value: "FSC Mix 70% recycled paperboard", source: "Primary" },
+      { field: "Carton spec", value: "Corrugated master carton · 24 3-packs", source: "Primary" },
+      { field: "Packaging weight", value: "18g per 3-pack (hangtag + band)", source: "Estimated" },
+    ],
+  },
+  {
+    id: "compliance",
+    label: "Certifications & compliance",
+    rows: [
+      { field: "GOTS / OEKO-TEX", value: "GOTS Scope Cert + OEKO-TEX Class I", source: "Primary" },
+      { field: "ZDHC MRSL", value: "Level 3 · ClearStream effluent 2026-Q1", source: "Primary" },
+      { field: "Nickel-free trim cert", value: "YKK SNAD cert #YKK-NF-2026-0412", source: "Primary" },
+      { field: "Restricted substances", value: "CPSIA + REACH Annex XVII compliant", source: "Primary" },
+    ],
+  },
+  {
+    id: "eol",
+    label: "End of life",
+    rows: [
+      { field: "Disposal route", value: "85% landfill · 12% incineration · 3% textile recycling", source: "Estimated" },
+      { field: "Recyclability index", value: "0.42 (mixed fiber; mono-cotton target 0.78)", source: "Estimated" },
+      { field: "Biodegradability", value: "Cotton fraction biodegradable · viscose semi-synthetic", source: "Estimated" },
+    ],
+  },
 ];
+
+const AI_FILL_ROWS = AI_FILL_GROUPS.flatMap((g) => g.rows);
 
 const AI_THINKING_STEPS = [
   "Scanning 16 responses for gaps…",
-  "7 fields missing from R&D, Ops, 3PL",
-  "Querying ecoinvent 3.10 — knit, IN",
+  "12 fields missing from R&D, Ops, 3PL",
+  "Querying ecoinvent 3.10: knit, IN",
   "Cross-referencing Higg MSI 3.7",
   "Estimating mfg energy from grid mix",
   "Inferring Mundra → Savannah lane",
+  "Filling packaging & end-of-life defaults",
 ];
 
 function Step3({ go }: { go: (s: Step) => void }) {
   const [phase, setPhase] = useState<"thinking" | "filling" | "done">("thinking");
   const [thinkingIdx, setThinkingIdx] = useState(0);
   const [filledAiCount, setFilledAiCount] = useState(0);
-  const [accuracy, setAccuracy] = useState(61);
+  const [accuracy, setAccuracy] = useState(58);
   const [buildingModel, setBuildingModel] = useState(false);
 
   const aiRows = AI_FILL_ROWS.filter((r) => r.source === "Estimated");
+  const primaryCount = AI_FILL_ROWS.filter((r) => r.source !== "Estimated").length;
 
   useEffect(() => {
     if (phase === "done") return;
@@ -961,18 +1113,18 @@ function Step3({ go }: { go: (s: Step) => void }) {
     }
     const fillTimer = setTimeout(() => {
       setFilledAiCount((c) => c + 1);
-      setAccuracy((a) => Math.min(74, a + 4));
-    }, 750);
+      setAccuracy((a) => Math.min(74, a + Math.ceil(16 / aiRows.length)));
+    }, 520);
     return () => clearTimeout(fillTimer);
   }, [phase, filledAiCount, aiRows.length]);
 
   function badge(s: string, loading?: boolean) {
     if (loading || s === "Estimated") return null;
-    if (s === "Primary") return <span className="chip chip-green">Primary</span>;
-    return <span className="chip chip-gray">Default</span>;
+    if (s === "Primary") return <span className="chip chip-green" style={{ fontSize: 10 }}>Primary</span>;
+    return <span className="chip chip-gray" style={{ fontSize: 10 }}>Default</span>;
   }
 
-  function rowState(row: (typeof AI_FILL_ROWS)[number], rowIndex: number) {
+  function rowState(row: FillRow, rowIndex: number) {
     if (row.source !== "Estimated") return { value: row.value, loading: false, filled: true };
     const aiIndex = AI_FILL_ROWS.slice(0, rowIndex + 1).filter((r) => r.source === "Estimated").length - 1;
     if (phase === "thinking") return { value: "", loading: true, filled: false };
@@ -987,96 +1139,114 @@ function Step3({ go }: { go: (s: Step) => void }) {
   }
 
   const title = phase === "done"
-    ? "2 inputs are missing. We've filled them."
+    ? `${aiRows.length} gaps filled. Model ready.`
     : phase === "filling"
       ? "Filling gaps with benchmark data…"
       : "Analyzing gaps across 16 responses…";
 
   return (
-    <div style={{ maxWidth: 1100, margin: "0 auto", padding: 40 }}>
+    <div style={{ maxWidth: 1180, margin: "0 auto", padding: 40 }}>
       <BackBtn go={go} to={2} />
       <Eyebrow>Gap fill</Eyebrow>
-      <h1 className="page-title" style={{ marginBottom: 10 }}>{title}</h1>
-      <p className="body-text" style={{ maxWidth: 760, marginBottom: 32 }}>
+      <h1 className="page-title" style={{ marginBottom: 8 }}>{title}</h1>
+      <p className="body-text" style={{ maxWidth: 760, marginBottom: 20 }}>
         {phase === "done"
-          ? "Missing fields filled from ecoinvent + Higg MSI benchmarks for Babywear · Knit Sleepwear."
+          ? `${AI_FILL_ROWS.length} LCA inputs assembled: ${primaryCount} from owners, ${aiRows.length} from benchmarks.`
           : "Comparing owner responses to the BOM and filling gaps from benchmarks."}
       </p>
 
       {(phase === "thinking" || phase === "filling") && (
-        <div className="card" style={{ padding: "16px 20px", marginBottom: 20, display: "flex", alignItems: "center", gap: 14, background: "var(--green-light)", border: "1px solid var(--green-border)" }}>
+        <div className="card" style={{ padding: "12px 18px", marginBottom: 16, display: "flex", alignItems: "center", gap: 12, background: "var(--green-light)", border: "1px solid var(--green-border)" }}>
           <span className="spinner" style={{ borderTopColor: "var(--green-dark)", flexShrink: 0 }} />
           <div>
-            <div style={{ fontSize: 14, fontWeight: 500, color: "var(--green-dark)" }}>
+            <div style={{ fontSize: 13, fontWeight: 500, color: "var(--green-dark)" }}>
               {phase === "thinking" ? "Matching responses to BOM template" : `Estimating field ${filledAiCount + 1} of ${aiRows.length}…`}
             </div>
-            <div style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 2 }} className="fade-in" key={thinkingIdx}>
+            <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }} className="fade-in" key={thinkingIdx}>
               {AI_THINKING_STEPS[thinkingIdx]}
             </div>
           </div>
         </div>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 24 }}>
-        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-          <div style={{ padding: "16px 24px", borderBottom: "1px solid var(--border)" }}>
-            <div className="card-title">Data inputs</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 260px", gap: 20, alignItems: "start" }}>
+        <div className="card" style={{ padding: 0, overflow: "hidden", maxHeight: 520, display: "flex", flexDirection: "column" }}>
+          <div style={{ padding: "12px 18px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "baseline", flexShrink: 0 }}>
+            <div className="card-title" style={{ fontSize: 14 }}>LCA data inputs</div>
+            <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>{AI_FILL_ROWS.length} fields · {AI_FILL_GROUPS.length} sections</span>
           </div>
-          <div>
-            {AI_FILL_ROWS.map((row, i) => {
-              const { value, loading, filled } = rowState(row, i);
-              const isAi = row.source === "Estimated";
-              return (
-                <div key={row.field} style={{
-                  display: "grid", gridTemplateColumns: "1.2fr 1.8fr auto",
-                  alignItems: "center", gap: 12, padding: "14px 24px",
-                  borderBottom: i === AI_FILL_ROWS.length - 1 ? "none" : "1px solid var(--border)",
-                  background: isAi && filled ? "rgba(254,243,226,0.4)" : isAi && loading ? "rgba(254,243,226,0.15)" : "transparent",
-                  transition: "background 400ms ease",
+          <div style={{ overflowY: "auto", flex: 1 }}>
+            {AI_FILL_GROUPS.map((group) => (
+              <div key={group.id}>
+                <div style={{
+                  padding: "8px 18px", fontSize: 11, fontWeight: 600, color: "var(--text-tertiary)",
+                  textTransform: "uppercase", letterSpacing: "0.06em", background: "var(--gray-section)",
+                  borderBottom: "1px solid var(--border)", position: "sticky", top: 0, zIndex: 1,
                 }}>
-                  <div style={{ fontSize: 14, fontWeight: 500 }}>{row.field}</div>
-                  <div style={{ fontSize: 14, color: loading ? "var(--text-tertiary)" : "var(--text-secondary)" }} className="tabular">
-                    {loading ? (
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                        <span className="spinner" style={{ width: 12, height: 12, borderTopColor: "var(--amber)" }} />
-                        <span style={{ fontStyle: "italic" }}>Inferring…</span>
-                      </span>
-                    ) : value}
-                  </div>
-                  <div>{badge(row.source, loading)}</div>
+                  {group.label}
                 </div>
-              );
-            })}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 0 }}>
+                  {group.rows.map((row) => {
+                    const rowIndex = AI_FILL_ROWS.indexOf(row);
+                    const { value, loading, filled } = rowState(row, rowIndex);
+                    const isAi = row.source === "Estimated";
+                    return (
+                      <div key={row.field} style={{
+                        padding: "8px 14px", borderBottom: "1px solid var(--border)", borderRight: "1px solid var(--border)",
+                        background: isAi && filled ? "rgba(254,243,226,0.35)" : isAi && loading ? "rgba(254,243,226,0.12)" : "transparent",
+                        transition: "background 400ms ease", minHeight: 52,
+                      }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 6, marginBottom: 3 }}>
+                          <div style={{ fontSize: 12, fontWeight: 500, lineHeight: 1.3 }}>{row.field}</div>
+                          {badge(row.source, loading)}
+                        </div>
+                        <div style={{ fontSize: 12, color: loading ? "var(--text-tertiary)" : "var(--text-secondary)", lineHeight: 1.35 }} className="tabular">
+                          {loading ? (
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                              <span className="spinner" style={{ width: 10, height: 10, borderTopColor: "var(--amber)" }} />
+                              <span style={{ fontStyle: "italic" }}>Inferring…</span>
+                            </span>
+                          ) : value}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 
-        <div style={{ position: "sticky", top: 80, alignSelf: "start", display: "flex", flexDirection: "column", gap: 16 }}>
-          <div className="card">
-            <div className="card-title" style={{ marginBottom: 10 }}>About gap-filled inputs</div>
-            <p className="body-text" style={{ fontSize: 14 }}>
-              Gaps filled from ecoinvent + Higg MSI. Replaced when primary data arrives.
-            </p>
+        <div style={{ position: "sticky", top: 80, display: "flex", flexDirection: "column", gap: 12 }}>
+          <div className="card" style={{ padding: 14 }}>
+            <div className="card-title" style={{ fontSize: 13, marginBottom: 8 }}>Input summary</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 12 }}>
+              {AI_FILL_GROUPS.map((g) => (
+                <div key={g.id} style={{ padding: "6px 8px", background: "var(--gray-section)", borderRadius: 6 }}>
+                  <div style={{ color: "var(--text-tertiary)", fontSize: 10, marginBottom: 2 }}>{g.label}</div>
+                  <div style={{ fontWeight: 600 }}>{g.rows.length}</div>
+                </div>
+              ))}
+            </div>
           </div>
 
-          <div className="card">
-            <div className="label" style={{ marginBottom: 8 }}>Current data accuracy</div>
-            <div className="num-large" style={{ color: "var(--green-dark)" }}>{accuracy}%</div>
-            <div style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 4 }}>
-              {phase === "done" ? "8 primary · 3 gap-filled" : `${8 + filledAiCount} primary · ${filledAiCount} gap-filled`}
+          <div className="card" style={{ padding: 14 }}>
+            <div className="label" style={{ marginBottom: 6 }}>Data accuracy</div>
+            <div className="num-large" style={{ color: "var(--green-dark)", fontSize: 28 }}>{accuracy}%</div>
+            <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>
+              {phase === "done" ? `${primaryCount} primary · ${aiRows.length} gap-filled` : `${primaryCount + filledAiCount} primary · ${filledAiCount} gap-filled`}
             </div>
-            <div style={{ height: 6, background: "var(--border-solid)", borderRadius: 4, marginTop: 14, overflow: "hidden" }}>
+            <div style={{ height: 5, background: "var(--border-solid)", borderRadius: 4, marginTop: 10, overflow: "hidden" }}>
               <div style={{ width: `${accuracy}%`, height: "100%", background: "var(--green-dark)", transition: "width 500ms ease" }} />
             </div>
-            <div style={{ marginTop: 10, fontSize: 12, color: "var(--text-tertiary)" }}>
-              {phase === "done"
-                ? "Reaches 92% when Ops & Logistics respond"
-                : "Updating as gaps are filled…"}
+            <div style={{ marginTop: 8, fontSize: 11, color: "var(--text-tertiary)" }}>
+              {phase === "done" ? "Reaches 92% when Ops & Logistics respond" : "Updating as gaps fill…"}
             </div>
           </div>
         </div>
       </div>
 
-      <button onClick={handleBuildModel} className="btn btn-primary" style={{ width: "100%", marginTop: 28, padding: 14 }} disabled={phase !== "done" || buildingModel}>
+      <button onClick={handleBuildModel} className="btn btn-primary" style={{ width: "100%", marginTop: 20, padding: 14 }} disabled={phase !== "done" || buildingModel}>
         {buildingModel ? <><span className="spinner" style={{ borderTopColor: "white" }} /> Preparing model…</> : "Build the model →"}
       </button>
     </div>
@@ -1084,7 +1254,7 @@ function Step3({ go }: { go: (s: Step) => void }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// STEP 4 — FOOTPRINT
+// STEP 4: FOOTPRINT
 // ─────────────────────────────────────────────────────────────────────
 
 const STAGE_COLORS = ["#2C6B45", "#4A9B6F", "#7BC4A0", "#B8E0CC", "#DCF0E6"];
@@ -1216,7 +1386,7 @@ const HOTSPOTS = [
     id: "manufacturing",
     badge: "Manufacturing",
     badgeColor: "amber",
-    title: "Shahi Unit 8 — dye & cut/sew",
+    title: "Shahi Unit 8: dye & cut/sew",
     impacts: {
       climate: "648 kg · 20%",
       water: "1,684 m³ · 20%",
@@ -1251,6 +1421,15 @@ function formatImpactValue(value: number, unit: string): string {
   return value.toLocaleString(undefined, { maximumFractionDigits: 0 });
 }
 
+function shortenHotspotNote(note: string, maxLen = 72): string {
+  const trimmed = note.trim();
+  if (trimmed.length <= maxLen) return trimmed;
+  const sentence = trimmed.match(/^[^.!?]+[.!?]/)?.[0]?.trim();
+  if (sentence && sentence.length <= maxLen) return sentence;
+  const cut = trimmed.slice(0, maxLen - 1).replace(/\s+\S*$/, "");
+  return `${cut}…`;
+}
+
 function Step4({ lcaData, go }: { lcaData: LcaData; go: (s: Step) => void }) {
   const impactCategories = lcaData.footprint?.impactCategories ?? IMPACT_CATEGORIES;
   const hotspots = (lcaData.footprint?.hotspots ?? HOTSPOTS) as FootprintHotspot[];
@@ -1262,11 +1441,14 @@ function Step4({ lcaData, go }: { lcaData: LcaData; go: (s: Step) => void }) {
     if (hotspots[0]?.id) setSelectedHotspot(hotspots[0].id);
   }, [lcaData.footprint]);
 
-  if (lcaData.pipelineStatus === "loading") {
+  if (lcaData.pipelineStatus === "loading" || lcaData.footprintCalculating) {
     return (
       <div style={{ padding: 40 }}>
         <BackBtn go={go} to={"model"} />
-        <LoadingPanel label="Calculating multi-impact footprint…" />
+        <LoadingPanel
+          label="Calculating multi-impact footprint…"
+          detail={lcaData.footprintCalculating ? "Aggregating impacts across six categories…" : "Calling Claude and Climatiq; this may take a moment."}
+        />
       </div>
     );
   }
@@ -1287,25 +1469,17 @@ function Step4({ lcaData, go }: { lcaData: LcaData; go: (s: Step) => void }) {
   const impact = impactCategories.find((c) => c.id === selectedImpact) ?? impactCategories[0]!;
   const isEnergy = impact.id === "energy";
   const accuracy = Math.max(lcaData.footprint.dataAccuracy || 74, 74);
-  const verifiedCount = Math.max(lcaData.footprint.verifiedCount, 5);
+  const gapFilledPct = 100 - accuracy;
 
   return (
     <div style={{ padding: 40 }}>
       <BackBtn go={go} to={"model"} />
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 28, flexWrap: "wrap", gap: 16 }}>
-        <div>
-          <Eyebrow>Footprint Breakdown</Eyebrow>
-          <h1 className="page-title">{lcaData.productName} · multi-impact footprint</h1>
-          <p className="body-text" style={{ marginTop: 8, maxWidth: 720 }}>
-            Pick an impact category to explore stages and hotspots.
-          </p>
-        </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <span className="chip chip-green">{accuracy}% primary data</span>
-          <span className="chip chip-gray">{lcaData.boundary.replace(/-/g, " ")}</span>
-          <span className="chip chip-gray">{lcaData.category}</span>
-          {verifiedCount > 0 && <span className="chip chip-green">{verifiedCount} Climatiq verified</span>}
-        </div>
+      <div style={{ marginBottom: 28 }}>
+        <Eyebrow>Footprint Breakdown</Eyebrow>
+        <h1 className="page-title">{lcaData.productName} · multi-impact footprint</h1>
+        <p className="body-text" style={{ marginTop: 8, maxWidth: 720 }}>
+          Pick an impact category to explore stages and hotspots.
+        </p>
       </div>
 
       {/* Impact category selector */}
@@ -1338,7 +1512,7 @@ function Step4({ lcaData, go }: { lcaData: LcaData; go: (s: Step) => void }) {
           { label: `${impact.label} total`, value: formatImpactValue(impact.total, impact.unit), caption: `${impact.unit} per 3-pack` },
           { label: "vs. industry avg", value: impact.vsIndustry, caption: impact.vsIndustryGood ? "Below category average" : "Above category average", color: impact.vsIndustryGood ? "var(--green-dark)" : "var(--amber)" },
           { label: "Top hotspot", value: impact.topHotspot, caption: `accounts for ${impact.topHotspotPct}%`, small: true },
-          { label: "Data accuracy", value: `${accuracy}%`, caption: `${verifiedCount} verified sources` },
+          { label: "Data accuracy", value: `${accuracy}%`, caption: `Mostly primary data · ${gapFilledPct}% AI gap-filled` },
         ].map((s, i) => (
           <div key={i} className="card">
             <div className="label" style={{ marginBottom: 12 }}>{s.label}</div>
@@ -1431,7 +1605,7 @@ function Step4({ lcaData, go }: { lcaData: LcaData; go: (s: Step) => void }) {
                   <SourceBadge source={h.source} />
                   <div style={{ fontSize: 14, fontWeight: 500, margin: "6px 0 6px" }}>{h.title}</div>
                   <div style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 8 }} className="tabular">{h.impacts[impact.id as keyof typeof h.impacts]}</div>
-                  <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5, marginBottom: 10 }}>{h.note}</div>
+                  <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.45, marginBottom: 10 }}>{shortenHotspotNote(h.note)}</div>
                   <span style={{ fontSize: 13, color: "var(--green-dark)", fontWeight: 500 }}>See action plays →</span>
                 </button>
               );
@@ -1495,7 +1669,7 @@ function Step4({ lcaData, go }: { lcaData: LcaData; go: (s: Step) => void }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// STEP 5 — ACTION QUEUE
+// STEP 5: ACTION QUEUE
 // ─────────────────────────────────────────────────────────────────────
 
 type Play = {
@@ -1566,7 +1740,7 @@ function Step5({ lcaData, setLcaData, go, pushToast }: { lcaData: LcaData; setLc
       .catch(() => {
         if (cancelled) return;
         setLcaData((d) => ({ ...d, actionsStatus: "error" }));
-        pushToast("Could not load live recommendations — showing defaults", "warning");
+        pushToast("Could not load live recommendations; showing defaults", "warning");
       });
 
     return () => { cancelled = true; };
@@ -1692,24 +1866,24 @@ function Step5({ lcaData, setLcaData, go, pushToast }: { lcaData: LcaData; setLc
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// STEP 6 — SCENARIO MODELING
+// STEP 6: SCENARIO MODELING
 // ─────────────────────────────────────────────────────────────────────
 
 const MATERIAL_OPTIONS = [
-  "100% GOTS organic cotton — Shahi Exports (current Tier 1)",
-  "100% GOTS organic cotton — Arvind Limited fully vertical",
-  "70% GOTS cotton + 30% Lenzing™ EcoVero™ — Lenzing AG / Arvind",
-  "60% GOTS cotton + 40% REPREVE® rPET — Unifi Inc.",
-  "100% TENCEL™ Lyocell — Lenzing AG (premium Little Planet capsule)",
+  "100% GOTS organic cotton · Shahi Exports (current Tier 1)",
+  "100% GOTS organic cotton · Arvind Limited fully vertical",
+  "70% GOTS cotton + 30% Lenzing™ EcoVero™ · Lenzing AG / Arvind",
+  "60% GOTS cotton + 40% REPREVE® rPET · Unifi Inc.",
+  "100% TENCEL™ Lyocell · Lenzing AG (premium Little Planet capsule)",
 ];
 
-// Pre-calculated scenarios — relative deltas vs baseline (3,240 g, $4.62/3-pack)
+// Pre-calculated scenarios: relative deltas vs baseline (3,240 g, $4.62/3-pack)
 const SCENARIOS: Record<string, { matBefore: number; matAfter: number; costAfter: number }> = {
-  "100% GOTS organic cotton — Shahi Exports (current Tier 1)":         { matBefore: 1976, matAfter: 1489, costAfter: 4.40 },
-  "100% GOTS organic cotton — Arvind Limited fully vertical":          { matBefore: 1976, matAfter: 1402, costAfter: 4.48 },
-  "70% GOTS cotton + 30% Lenzing™ EcoVero™ — Lenzing AG / Arvind":     { matBefore: 1976, matAfter: 1612, costAfter: 4.66 },
-  "60% GOTS cotton + 40% REPREVE® rPET — Unifi Inc.":                  { matBefore: 1976, matAfter: 1390, costAfter: 4.58 },
-  "100% TENCEL™ Lyocell — Lenzing AG (premium Little Planet capsule)": { matBefore: 1976, matAfter: 1550, costAfter: 4.94 },
+  "100% GOTS organic cotton · Shahi Exports (current Tier 1)":         { matBefore: 1976, matAfter: 1489, costAfter: 4.40 },
+  "100% GOTS organic cotton · Arvind Limited fully vertical":          { matBefore: 1976, matAfter: 1402, costAfter: 4.48 },
+  "70% GOTS cotton + 30% Lenzing™ EcoVero™ · Lenzing AG / Arvind":     { matBefore: 1976, matAfter: 1612, costAfter: 4.66 },
+  "60% GOTS cotton + 40% REPREVE® rPET · Unifi Inc.":                  { matBefore: 1976, matAfter: 1390, costAfter: 4.58 },
+  "100% TENCEL™ Lyocell · Lenzing AG (premium Little Planet capsule)": { matBefore: 1976, matAfter: 1550, costAfter: 4.94 },
 };
 
 const BASELINE_UNIT_COST_USD = 4.62;
@@ -1744,7 +1918,7 @@ function enrichScenarioWithCost(
           },
           {
             metric: "Annual cost impact",
-            before: "—",
+            before: "-",
             after: `${annualCostSavingUsd >= 0 ? "+" : "−"}$${Math.abs(Math.round(annualCostSavingUsd)).toLocaleString()}`,
             delta: `at ${(opts.volume / 1000).toFixed(0)}k units/yr`,
             improved: annualCostSavingUsd >= 0,
@@ -1814,9 +1988,9 @@ function Step6({ lcaData, setLcaData, go, pushToast }: { lcaData: LcaData; setLc
             { metric: "Material CO₂e", before: `${fallbackScenario.matBefore.toLocaleString()} kg`, after: `${fallbackScenario.matAfter.toLocaleString()} kg`, delta: `${matDelta > 0 ? "+" : ""}${matDelta} kg`, improved: matDelta < 0, source: "ai_estimated" },
             { metric: "Total footprint", before: `${baselineClimate.toLocaleString()} kg`, after: `${(baselineClimate + matDelta).toLocaleString()} kg`, delta: `${matDelta > 0 ? "+" : ""}${matDelta} kg`, improved: matDelta < 0, source: "ai_estimated" },
             { metric: "Material cost / 3-pack", before: `$${BASELINE_UNIT_COST_USD.toFixed(2)}`, after: `$${fallbackScenario.costAfter.toFixed(2)}`, delta: `${fallbackScenario.costAfter - BASELINE_UNIT_COST_USD > 0 ? "+" : ""}$${(fallbackScenario.costAfter - BASELINE_UNIT_COST_USD).toFixed(2)}`, improved: fallbackScenario.costAfter < BASELINE_UNIT_COST_USD, source: "ai_estimated" },
-            { metric: "Annual CO₂ reduction", before: "—", after: `${Math.abs(matDelta * volume / 1000).toLocaleString()} kg`, delta: `at ${(volume / 1000).toFixed(0)}k units`, improved: true, source: "ai_estimated" },
-            { metric: "Carbon cost savings", before: "—", after: `$${Math.round(Math.abs(matDelta) * volume / 1000 * 65).toLocaleString()}`, delta: "@ $65/tonne CO₂e", improved: true, source: "ai_estimated" },
-            { metric: "Annual cost impact", before: "—", after: `${(BASELINE_UNIT_COST_USD - fallbackScenario.costAfter) * volume >= 0 ? "+" : "−"}$${Math.abs(Math.round((BASELINE_UNIT_COST_USD - fallbackScenario.costAfter) * volume)).toLocaleString()}`, delta: `at ${(volume / 1000).toFixed(0)}k units/yr`, improved: fallbackScenario.costAfter <= BASELINE_UNIT_COST_USD, source: "ai_estimated" },
+            { metric: "Annual CO₂ reduction", before: "-", after: `${Math.abs(matDelta * volume / 1000).toLocaleString()} kg`, delta: `at ${(volume / 1000).toFixed(0)}k units`, improved: true, source: "ai_estimated" },
+            { metric: "Carbon cost savings", before: "-", after: `$${Math.round(Math.abs(matDelta) * volume / 1000 * 65).toLocaleString()}`, delta: "@ $65/tonne CO₂e", improved: true, source: "ai_estimated" },
+            { metric: "Annual cost impact", before: "-", after: `${(BASELINE_UNIT_COST_USD - fallbackScenario.costAfter) * volume >= 0 ? "+" : "−"}$${Math.abs(Math.round((BASELINE_UNIT_COST_USD - fallbackScenario.costAfter) * volume)).toLocaleString()}`, delta: `at ${(volume / 1000).toFixed(0)}k units/yr`, improved: fallbackScenario.costAfter <= BASELINE_UNIT_COST_USD, source: "ai_estimated" },
           ],
           impactCategories: lcaData.footprint!.impactCategories.map((category) => ({
             id: category.id,
@@ -2003,7 +2177,7 @@ function Step6({ lcaData, setLcaData, go, pushToast }: { lcaData: LcaData; setLc
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// STEP 7 — ASSIGN & GENERATE
+// STEP 7: ASSIGN & GENERATE
 // ─────────────────────────────────────────────────────────────────────
 
 const ARTIFACTS = [
@@ -2013,9 +2187,9 @@ const ARTIFACTS = [
 ];
 
 const RFP_TEXT = `SUPPLIER REQUEST FOR PROPOSAL
-Carter's, Inc. — Global Sourcing · Babywear
+Carter's, Inc. · Global Sourcing · Babywear
 Generated: June 15, 2026
-Prepared by: Alex Johnson, Sourcing Lead — Little Planet™
+Prepared by: Alex Johnson, Sourcing Lead, Little Planet™
 
 PRODUCT REFERENCE
 Product: Little Planet™ Organic Sleep & Play (3-Pack), NB–9M
@@ -2025,11 +2199,11 @@ Target spec: 100% GOTS organic cotton, 195 GSM interlock, OEKO-TEX Std 100 Class
 LCA reference: Pathways LCA #LP-2026-3PSP-001
 
 BACKGROUND
-Aligned to Carter's Raise the Future™ commitments — Sustainably Made, Safe for Kids, and Tough for Play — the sourcing team has completed a lifecycle assessment for the Little Planet™ Organic Sleep & Play (3-Pack). The assessment identifies a single-fiber simplification at our Tier 1 partner Shahi Exports (Unit 8, Bengaluru) that reduces Scope 3.1 emissions by 487 g CO₂e per 3-pack (15% vs. baseline) and lowers landed cost by $0.22 per 3-pack at run-rate volume.
+Aligned to Carter's Raise the Future™ commitments (Sustainably Made, Safe for Kids, and Tough for Play), the sourcing team has completed a lifecycle assessment for the Little Planet™ Organic Sleep & Play (3-Pack). The assessment identifies a single-fiber simplification at our Tier 1 partner Shahi Exports (Unit 8, Bengaluru) that reduces Scope 3.1 emissions by 487 g CO₂e per 3-pack (15% vs. baseline) and lowers landed cost by $0.22 per 3-pack at run-rate volume.
 
 We are inviting GOTS Scope-Certified Tier 2 fabric mills to submit proposals for a 12,000-unit Fall '26 pilot.
 
-REQUIREMENTS — RAISE THE FUTURE™ COMPLIANCE
+REQUIREMENTS: RAISE THE FUTURE™ COMPLIANCE
 · Sustainably Made: 100% GOTS organic cotton, valid Scope Certificate (Control Union or Ecocert) through FY27
 · Safe for Kids: OEKO-TEX Standard 100 Class I (suitable for products in direct contact with infants <36 mo); ZDHC MRSL v3.1 Level 3 compliance; nickel-free trims
 · Tough for Play: Wash durability ≥ 50 cycles per Carter's Test Method CT-DUR-04 (no >5% pilling, no seam failure)
@@ -2045,7 +2219,7 @@ COMMERCIAL
 SUSTAINABILITY CONTEXT
 This change supports Carter's 2030 Scope 3 reduction commitment and the Raise the Future™ goal to expand GOTS-certified organic cotton across the Little Planet™ assortment. LCA modeled in Pathways using ecoinvent 3.10 + Higg MSI 3.7 (South Asia knit garment), PEFCR Apparel & Footwear methodology, ISO 14044 aligned.
 
-At 480,000 3-packs / year (Little Planet™ Sleep & Play run rate), this change avoids 234,000 kg CO₂e annually — roughly the footprint of 51 round-trip transatlantic flights.
+At 480,000 3-packs / year (Little Planet™ Sleep & Play run rate), this change avoids 234,000 kg CO₂e annually, roughly the footprint of 51 round-trip transatlantic flights.
 
 SUBMISSION
 Please respond to sourcing.babywear@carters.com by June 29, 2026:
@@ -2058,7 +2232,7 @@ Please respond to sourcing.babywear@carters.com by June 29, 2026:
 Invited vendors: Arvind Limited (Naroda), Pratibha Syntex (Pithampur), Spectrum Knits (Tirupur). Proposals received by the deadline will receive a response within 5 business days.`;
 
 function Step7({ lcaData, setLcaData, go, pushToast }: { lcaData: LcaData; setLcaData: (f: (d: LcaData) => LcaData) => void; go: (s: Step) => void; pushToast: (t: string, k?: Toast["kind"]) => void }) {
-  const [recipient, setRecipient] = useState("Priya Raghavan, Director of Sourcing — Babywear");
+  const [recipient, setRecipient] = useState("Priya Raghavan, Director of Sourcing, Babywear");
   const [generating, setGenerating] = useState(false);
   const [generated, setGenerated] = useState(lcaData.artifactGenerated);
   const [copied, setCopied] = useState(false);
@@ -2097,7 +2271,7 @@ function Step7({ lcaData, setLcaData, go, pushToast }: { lcaData: LcaData; setLc
       <div style={{ padding: 16, background: "var(--green-light)", border: "1px solid var(--green-border)", borderRadius: 12, marginBottom: 28 }}>
         <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 6 }}>Selected play: Move to 100% GOTS organic cotton with Shahi Exports</div>
         <div style={{ fontSize: 13, color: "var(--text-secondary)" }}>
-          Pillar: Sustainably Made · CO₂: -487 g/3-pack · Cost: -$0.22/3-pack · Effort: Low · Owner: Sourcing — Babywear
+          Pillar: Sustainably Made · CO₂: -487 g/3-pack · Cost: -$0.22/3-pack · Effort: Low · Owner: Sourcing, Babywear
         </div>
       </div>
 
@@ -2187,7 +2361,7 @@ function Step7({ lcaData, setLcaData, go, pushToast }: { lcaData: LcaData; setLc
             </div>
             <div>
               <div className="label" style={{ marginBottom: 6 }}>Subject</div>
-              <input className="input" defaultValue="Supplier RFP — 100% GOTS Organic Cotton, Little Planet™ Sleep & Play" />
+              <input className="input" defaultValue="Supplier RFP: 100% GOTS Organic Cotton, Little Planet™ Sleep & Play" />
             </div>
             <div>
               <div className="label" style={{ marginBottom: 6 }}>Body</div>
@@ -2212,7 +2386,7 @@ function Dashboard({ go }: { go: (s: Step) => void }) {
   return (
     <div style={{ padding: 40 }}>
       <h1 className="page-title" style={{ marginBottom: 6 }}>Dashboard</h1>
-      <p className="body-text" style={{ marginBottom: 28 }}>Welcome back, Alex — Sourcing Lead, Little Planet™</p>
+      <p className="body-text" style={{ marginBottom: 28 }}>Welcome back, Alex · Sourcing Lead, Little Planet™</p>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 28 }}>
         {[
@@ -2277,7 +2451,7 @@ function Dashboard({ go }: { go: (s: Step) => void }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// STEP 3.5 — LCA MODEL (process network, inventory, flows)
+// STEP 3.5: LCA MODEL (process network, inventory, flows)
 // ─────────────────────────────────────────────────────────────────────
 
 const MODEL_PROCESSES = [
@@ -2286,9 +2460,9 @@ const MODEL_PROCESSES = [
   { id: "yarn", name: "Ring-spun yarn, Arvind Naroda", loc: "IN", db: "Primary (Arvind)", co2: 184, kind: "foreground" },
   { id: "weave", name: "Single-jersey knitting, 195 GSM", loc: "IN", db: "Primary (Arvind)", co2: 312, kind: "foreground" },
   { id: "dye", name: "Bluesign® reactive dye + finishing", loc: "IN", db: "Higg MSI 3.7", co2: 379, kind: "foreground" },
-  { id: "cutsew", name: "Cut, sew & snap assembly — Shahi Unit 8", loc: "IN", db: "Primary (Shahi)", co2: 156, kind: "foreground" },
+  { id: "cutsew", name: "Cut, sew & snap assembly, Shahi Unit 8", loc: "IN", db: "Primary (Shahi)", co2: 156, kind: "foreground" },
   { id: "pack", name: "FSC™ hangtag + recycled carton pack-out", loc: "IN", db: "ecoinvent 3.10", co2: 48, kind: "foreground" },
-  { id: "freight", name: "Sea freight, Mundra → Savannah, GA", loc: "—", db: "ecoinvent 3.10", co2: 421, kind: "background" },
+  { id: "freight", name: "Sea freight, Mundra → Savannah, GA", loc: "-", db: "ecoinvent 3.10", co2: 421, kind: "background" },
   { id: "tote", name: "Little Planet™ Sleep & Play 3-Pack (FU)", loc: "US", db: "Reference product", co2: 3240, kind: "product" },
 ];
 
@@ -2318,11 +2492,11 @@ const ELEM_FLOWS = [
 
 const IMPACT_METHODS = [
   { name: "IPCC 2021, GWP 100a", value: "3.24", unit: "kg CO₂e", contrib: 100 },
-  { name: "ReCiPe 2016 — Climate change", value: "3.19", unit: "kg CO₂e", contrib: 98 },
-  { name: "ReCiPe 2016 — Water consumption", value: "0.041", unit: "m³", contrib: 64 },
-  { name: "ReCiPe 2016 — Fossil resource scarcity", value: "1.18", unit: "kg oil-eq", contrib: 71 },
-  { name: "EF 3.1 — Particulate matter", value: "8.4e-8", unit: "disease inc.", contrib: 22 },
-  { name: "USEtox — Ecotoxicity, freshwater", value: "0.62", unit: "CTUe", contrib: 38 },
+  { name: "ReCiPe 2016: Climate change", value: "3.19", unit: "kg CO₂e", contrib: 98 },
+  { name: "ReCiPe 2016: Water consumption", value: "0.041", unit: "m³", contrib: 64 },
+  { name: "ReCiPe 2016: Fossil resource scarcity", value: "1.18", unit: "kg oil-eq", contrib: 71 },
+  { name: "EF 3.1: Particulate matter", value: "8.4e-8", unit: "disease inc.", contrib: 22 },
+  { name: "USEtox: Ecotoxicity, freshwater", value: "0.62", unit: "CTUe", contrib: 38 },
 ];
 
 const MODEL_LOAD_STEPS = [
@@ -2333,8 +2507,9 @@ const MODEL_LOAD_STEPS = [
   "Validating product system graph…",
 ];
 
-function StepModel({ go }: { go: (s: Step) => void }) {
+function StepModel({ go, setLcaData }: { go: (s: Step) => void; setLcaData: (f: (d: LcaData) => LcaData) => void }) {
   const [loading, setLoading] = useState(true);
+  const [calculatingFootprint, setCalculatingFootprint] = useState(false);
   const [loadStep, setLoadStep] = useState(0);
   const [selected, setSelected] = useState("dye");
   const [tab, setTab] = useState<"techno" | "elem" | "params" | "impact">("techno");
@@ -2360,6 +2535,16 @@ function StepModel({ go }: { go: (s: Step) => void }) {
     minWidth: 168,
     transition: "all 160ms ease",
   });
+
+  function handleCalculateFootprint() {
+    setCalculatingFootprint(true);
+    setLcaData((d) => ({ ...d, footprintCalculating: true }));
+    go(4);
+    window.setTimeout(() => {
+      setLcaData((d) => ({ ...d, footprintCalculating: false }));
+      setCalculatingFootprint(false);
+    }, 1800);
+  }
 
   const Node = ({ id, x, y }: { id: string; x: number; y: number }) => {
     const p = MODEL_PROCESSES.find((m) => m.id === id)!;
@@ -2639,8 +2824,8 @@ function StepModel({ go }: { go: (s: Step) => void }) {
         </div>
       </div>
 
-      <button onClick={() => go(4)} className="btn btn-primary" style={{ width: "100%", marginTop: 28, padding: 14 }}>
-        Calculate footprint →
+      <button onClick={handleCalculateFootprint} className="btn btn-primary" style={{ width: "100%", marginTop: 28, padding: 14 }} disabled={calculatingFootprint}>
+        {calculatingFootprint ? <><span className="spinner" style={{ borderTopColor: "white" }} /> Calculating footprint…</> : "Calculate footprint →"}
       </button>
       </>
       )}
@@ -2708,50 +2893,102 @@ function FlowTable({ rows, cols }: { rows: FlowRow[]; cols: string[] }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// PRM INTEGRATION — How we knew who to ask
+// PRM INTEGRATION: How we knew who to ask
 // ─────────────────────────────────────────────────────────────────────
 
 const PRM_FIELDS = [
-  { sf: "Account (Vendor) → Account.Parent", maps: "Account relationships — who supplies what", val: "11 vendor accounts linked to Style 225G731 BOM (Shahi, Arvind, Lenzing, YKK, Maersk…)", conf: "exact" },
-  { sf: "Contact (External) where AccountId IN :vendors", maps: "Supplier contacts — named person per vendor, not a generic inbox", val: "7 named supplier contacts (Sustainability, EHS, Plant Mgr, Account Director)", conf: "exact" },
-  { sf: "User + Contact (Internal) where Department IN (…)", maps: "Internal team members — procurement, ops, logistics owners", val: "9 Carter's HQ owners (Sourcing, Procurement, Mfg Ops, Facilities, Logistics, DC)", conf: "exact" },
-  { sf: "Contact.ReportsToId chain", maps: "Org hierarchy — right person vs. generic role inbox", val: "Resolved to individual owner at each vendor (skipped 4 shared aliases)", conf: "exact" },
+  { sf: "Account (Vendor) → Account.Parent", maps: "Account relationships: who supplies what", val: "11 vendor accounts linked to Style 225G731 BOM (Shahi, Arvind, Lenzing, YKK, Maersk…)", conf: "exact" },
+  { sf: "Contact (External) where AccountId IN :vendors", maps: "Supplier contacts: named person per vendor, not a generic inbox", val: "7 named supplier contacts (Sustainability, EHS, Plant Mgr, Account Director)", conf: "exact" },
+  { sf: "User + Contact (Internal) where Department IN (…)", maps: "Internal team members: procurement, ops, logistics owners", val: "9 Carter's HQ owners (Sourcing, Procurement, Mfg Ops, Facilities, Logistics, DC)", conf: "exact" },
+  { sf: "Contact.ReportsToId chain", maps: "Org hierarchy: right person vs. generic role inbox", val: "Resolved to individual owner at each vendor (skipped 4 shared aliases)", conf: "exact" },
   { sf: "AccountContactRelation.Roles", maps: "Account ↔ material/component coverage", val: "Maps each contact to the BOM line they own (fabric, trim, fiber, freight)", conf: "rule" },
-  { sf: "Contact.Last_Verified_At__c", maps: "Contact freshness — avoids bouncing emails", val: "16/16 contacts verified in last 90 days", conf: "rule" },
+  { sf: "Contact.Last_Verified_At__c", maps: "Contact freshness: avoids bouncing emails", val: "16/16 contacts verified in last 90 days", conf: "rule" },
 ];
 
 const PRM_OWNERS = [
-  // ── Internal — Carter's HQ ──
-  { dept: "Product Management", icon: <I.box />, name: "Alex Johnson", email: "alex.johnson@carters.com", title: "Sr. Product Manager, Little Planet™", sfRole: "Product2 Lead — Style 225G731", group: "Internal · Carter's HQ", queries: ["Bill of materials", "Product weight", "Compliance deadline", "Supplier contact list"], why: "Primary PM on the SKU — owns BOM, product specs, weight/dimensions, and compliance timeline" },
+  // Internal · Carter's HQ
+  { dept: "Product Management", icon: <I.box />, name: "Alex Johnson", email: "alex.johnson@carters.com", title: "Sr. Product Manager, Little Planet™", sfRole: "Product2 Lead, Style 225G731", group: "Internal · Carter's HQ", queries: ["Bill of materials", "Product weight", "Compliance deadline", "Supplier contact list"], why: "Primary PM on the SKU; owns BOM, product specs, weight/dimensions, and compliance timeline" },
   { dept: "Design & PD", icon: <I.pencil />, name: "Megan O'Connell", email: "megan.oconnell@carters.com", title: "Senior Designer, Little Planet™", sfRole: "Material Composition Owner", group: "Internal · Carter's HQ", queries: ["Material composition", "Fabric weight (GSM)", "Wash durability cycles", "End-of-life design"], why: "Owns material % composition, snap/trim selection, and end-of-life recyclability assumptions" },
   { dept: "R&D / Engineering", icon: <I.pencil />, name: "Wei Zhang", email: "wei.zhang@carters.com", title: "Textile R&D Engineer", sfRole: "Process Spec Owner", group: "Internal · Carter's HQ", queries: ["Process specs (knit, dye, finish)", "Packaging design", "Disassembly index"], why: "Defines manufacturing process specs (knitting, dyeing, finishing) and packaging design system" },
-  { dept: "Sourcing — Babywear", icon: <I.box />, name: "Priya Raghavan", email: "priya.raghavan@carters.com", title: "Director, Sourcing — Babywear", sfRole: "Vendor Relationship Owner — Shahi Exports", group: "Internal · Carter's HQ", queries: ["Tier 1–2 vendor accounts", "Fabric specification", "Supplier location", "Inbound freight"], why: "Owns Shahi Exports MSA + 9 of 11 Tier-2 mill contracts; routes Tier-1/2 supplier requests" },
-  { dept: "Procurement — Trims", icon: <I.box />, name: "Hannah Park", email: "hannah.park@carters.com", title: "Procurement Manager, Trims & Packaging", sfRole: "PO Owner — YKK / Avery Dennison", group: "Internal · Carter's HQ", queries: ["Trim and packaging purchase orders", "Supplier packaging materials"], why: "Owns inbound packaging materials and trim supplier routing (YKK SNAD, Avery Dennison FSC)" },
-  { dept: "Manufacturing Ops", icon: <I.factory />, name: "Rakesh Iyer", email: "rakesh.iyer@carters.com", title: "Mfg Ops Lead, India South", sfRole: "Site Lead — Bengaluru", group: "Internal · Carter's HQ", queries: ["Manufacturing site (India South)", "Energy log (last 90 days)", "Water use", "Waste manifest", "ZDHC ClearStream compliance"], why: "Single ops lead tied to Shahi Unit 8 — owns electricity, gas, water, and on-site waste data" },
-  { dept: "Facilities — Bengaluru", icon: <I.factory />, name: "Anjali Krishnan", email: "anjali.krishnan@carters.com", title: "Facilities Manager, Shahi Unit 8 (embed)", sfRole: "Equipment Efficiency Owner", group: "Internal · Carter's HQ", queries: ["Equipment efficiency", "Steam consumption", "Compressed air (kWh)"], why: "Tracks per-line equipment efficiency and process utility consumption per production run" },
-  { dept: "Global Logistics", icon: <I.truck />, name: "Daniel Reyes", email: "daniel.reyes@carters.com", title: "Sr. Manager, Global Logistics", sfRole: "Shipment Owner — IN→US lanes", group: "Internal · Carter's HQ", queries: ["Shipment records for SKU-LP-3PSP-NB", "Carrier transport mode", "Mundra–Savannah shipping lane"], why: "Owns Mundra→Savannah outbound shipments and inbound freight volumes for this style YTD" },
-  { dept: "Distribution — Braselton DC", icon: <I.truck />, name: "Marcus Lee", email: "marcus.lee@carters.com", title: "DC Operations Manager, Braselton GA", sfRole: "Warehouse Energy Owner", group: "Internal · Carter's HQ", queries: ["Braselton warehouse data", "Warehouse energy (kWh)", "Last-mile carrier mix"], why: "Owns warehousing energy use and last-mile carrier mix from Braselton DC to retail / DTC" },
+  { dept: "Sourcing, Babywear", icon: <I.box />, name: "Priya Raghavan", email: "priya.raghavan@carters.com", title: "Director, Sourcing, Babywear", sfRole: "Vendor Relationship Owner, Shahi Exports", group: "Internal · Carter's HQ", queries: ["Tier 1–2 vendor accounts", "Fabric specification", "Supplier location", "Inbound freight"], why: "Owns Shahi Exports MSA + 9 of 11 Tier-2 mill contracts; routes Tier-1/2 supplier requests" },
+  { dept: "Procurement, Trims", icon: <I.box />, name: "Hannah Park", email: "hannah.park@carters.com", title: "Procurement Manager, Trims & Packaging", sfRole: "PO Owner, YKK / Avery Dennison", group: "Internal · Carter's HQ", queries: ["Trim and packaging purchase orders", "Supplier packaging materials"], why: "Owns inbound packaging materials and trim supplier routing (YKK SNAD, Avery Dennison FSC)" },
+  { dept: "Manufacturing Ops", icon: <I.factory />, name: "Rakesh Iyer", email: "rakesh.iyer@carters.com", title: "Mfg Ops Lead, India South", sfRole: "Site Lead, Bengaluru", group: "Internal · Carter's HQ", queries: ["Manufacturing site (India South)", "Energy log (last 90 days)", "Water use", "Waste manifest", "ZDHC ClearStream compliance"], why: "Single ops lead tied to Shahi Unit 8; owns electricity, gas, water, and on-site waste data" },
+  { dept: "Facilities, Bengaluru", icon: <I.factory />, name: "Anjali Krishnan", email: "anjali.krishnan@carters.com", title: "Facilities Manager, Shahi Unit 8 (embed)", sfRole: "Equipment Efficiency Owner", group: "Internal · Carter's HQ", queries: ["Equipment efficiency", "Steam consumption", "Compressed air (kWh)"], why: "Tracks per-line equipment efficiency and process utility consumption per production run" },
+  { dept: "Global Logistics", icon: <I.truck />, name: "Daniel Reyes", email: "daniel.reyes@carters.com", title: "Sr. Manager, Global Logistics", sfRole: "Shipment Owner, IN→US lanes", group: "Internal · Carter's HQ", queries: ["Shipment records for SKU-LP-3PSP-NB", "Carrier transport mode", "Mundra–Savannah shipping lane"], why: "Owns Mundra→Savannah outbound shipments and inbound freight volumes for this style YTD" },
+  { dept: "Distribution, Braselton DC", icon: <I.truck />, name: "Marcus Lee", email: "marcus.lee@carters.com", title: "DC Operations Manager, Braselton GA", sfRole: "Warehouse Energy Owner", group: "Internal · Carter's HQ", queries: ["Braselton warehouse data", "Warehouse energy (kWh)", "Last-mile carrier mix"], why: "Owns warehousing energy use and last-mile carrier mix from Braselton DC to retail / DTC" },
 
-  // ── External — Tier-1 / Tier-2 / 3PL (Pathways Data Requests) ──
-  { dept: "Tier 1 Supplier", icon: <I.box />, name: "Sunil Mehta", email: "sunil.mehta@shahi.co.in", title: "Sustainability Lead — Shahi Exports", sfRole: "External — Vendor Contact", group: "External · Data Request", queries: ["Primary material production data", "Component EPDs", "Packaging weight"], why: "Cut-and-sew partner for Style 225G731 — provides primary material data, component EPDs, and packaging weight" },
-  { dept: "Tier 2 Mill", icon: <I.box />, name: "Lakshmi Narayanan", email: "lakshmi.narayanan@arvind.com", title: "EHS Manager — Arvind Limited (Naroda)", sfRole: "External — Tier-2 Mill Contact", group: "External · Data Request", queries: ["GOTS certificate", "Dye house energy", "Effluent (kg)"], why: "Owns GOTS certificate, dye-house energy, and effluent data for the knit fabric supplied to Shahi" },
-  { dept: "Tier 2 Fiber", icon: <I.box />, name: "Klaus Berger", email: "klaus.berger@lenzing.com", title: "Sustainability Manager — Lenzing AG", sfRole: "External — EcoVero™ Account", group: "External · Data Request", queries: ["EcoVero LCA module", "Wood pulp FSC chain of custody"], why: "Provides EcoVero™ viscose LCA module + FSC chain-of-custody for the 5% blend" },
-  { dept: "Contract Manufacturer", icon: <I.factory />, name: "Aditi Sharma", email: "aditi.sharma@shahi.co.in", title: "Plant Manager — Shahi Unit 8 Finishing", sfRole: "External — Toll Mfg Contact", group: "External · Data Request", queries: ["Energy per unit (kWh)", "Scrap rate (%)", "Coating process emissions"], why: "Runs finishing line — owns per-unit energy, scrap rate, and process-specific emissions (printing, coating)" },
-  { dept: "Trim Supplier", icon: <I.box />, name: "Tomoko Yamada", email: "tomoko.yamada@ykk.com", title: "Account Manager — YKK SNAD (Tirupur)", sfRole: "External — Trim Vendor", group: "External · Data Request", queries: ["Snap material specification", "Nickel-free certificate", "Component weight (g)"], why: "Supplies nickel-free brass snaps — provides component spec, certificate, and weight per garment" },
-  { dept: "3PL — Ocean", icon: <I.truck />, name: "Henrik Sørensen", email: "henrik.sorensen@maersk.com", title: "Account Director — Maersk Spot", sfRole: "External — Carrier Contact", group: "External · Data Request", queries: ["Lane distance (nautical miles)", "Vessel fuel type", "TEU utilization (%)"], why: "Confirms Mundra→Savannah lane distance, fuel mix (VLSFO vs. bio-blend), and TEU utilization" },
-  { dept: "3PL — Inland US", icon: <I.truck />, name: "Carla Mendes", email: "carla.mendes@schneider.com", title: "Operations Lead — Schneider National", sfRole: "External — Drayage / Trucking", group: "External · Data Request", queries: ["Drayage distance (miles)", "Diesel consumption (gal/mile)", "Rail vs. road mode mix"], why: "Owns Savannah port → Braselton DC drayage — provides fuel consumption and rail/road mode confirmations" },
+  // External · Tier-1 / Tier-2 / 3PL (Pathways Data Requests)
+  { dept: "Tier 1 Supplier", icon: <I.box />, name: "Sunil Mehta", email: "sunil.mehta@shahi.co.in", title: "Sustainability Lead, Shahi Exports", sfRole: "External : vendor contact", group: "External · Data Request", queries: ["Primary material production data", "Component EPDs", "Packaging weight"], why: "Cut-and-sew partner for Style 225G731; provides primary material data, component EPDs, and packaging weight" },
+  { dept: "Tier 2 Mill", icon: <I.box />, name: "Lakshmi Narayanan", email: "lakshmi.narayanan@arvind.com", title: "EHS Manager, Arvind Limited (Naroda)", sfRole: "External : tier-2 mill contact", group: "External · Data Request", queries: ["GOTS certificate", "Dye house energy", "Effluent (kg)"], why: "Owns GOTS certificate, dye-house energy, and effluent data for the knit fabric supplied to Shahi" },
+  { dept: "Tier 2 Fiber", icon: <I.box />, name: "Klaus Berger", email: "klaus.berger@lenzing.com", title: "Sustainability Manager, Lenzing AG", sfRole: "External : ecovero account", group: "External · Data Request", queries: ["EcoVero LCA module", "Wood pulp FSC chain of custody"], why: "Provides EcoVero™ viscose LCA module + FSC chain-of-custody for the 5% blend" },
+  { dept: "Contract Manufacturer", icon: <I.factory />, name: "Aditi Sharma", email: "aditi.sharma@shahi.co.in", title: "Plant Manager, Shahi Unit 8 Finishing", sfRole: "External : toll mfg contact", group: "External · Data Request", queries: ["Energy per unit (kWh)", "Scrap rate (%)", "Coating process emissions"], why: "Runs finishing line; owns per-unit energy, scrap rate, and process-specific emissions (printing, coating)" },
+  { dept: "Trim Supplier", icon: <I.box />, name: "Tomoko Yamada", email: "tomoko.yamada@ykk.com", title: "Account Manager, YKK SNAD (Tirupur)", sfRole: "External : trim vendor", group: "External · Data Request", queries: ["Snap material specification", "Nickel-free certificate", "Component weight (g)"], why: "Supplies nickel-free brass snaps; provides component spec, certificate, and weight per garment" },
+  { dept: "3PL, Ocean", icon: <I.truck />, name: "Henrik Sørensen", email: "henrik.sorensen@maersk.com", title: "Account Director, Maersk Spot", sfRole: "External : carrier contact", group: "External · Data Request", queries: ["Lane distance (nautical miles)", "Vessel fuel type", "TEU utilization (%)"], why: "Confirms Mundra→Savannah lane distance, fuel mix (VLSFO vs. bio-blend), and TEU utilization" },
+  { dept: "3PL, Inland US", icon: <I.truck />, name: "Carla Mendes", email: "carla.mendes@schneider.com", title: "Operations Lead, Schneider National", sfRole: "External : drayage / trucking", group: "External · Data Request", queries: ["Drayage distance (miles)", "Diesel consumption (gal/mile)", "Rail vs. road mode mix"], why: "Owns Savannah port → Braselton DC drayage; provides fuel consumption and rail/road mode confirmations" },
 ];
+
+function PrmDeliverables({ queries }: { queries: string[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ borderTop: "1px solid var(--border)", paddingTop: 10, marginTop: 12 }}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          width: "100%",
+          background: "none",
+          border: "none",
+          padding: 0,
+          cursor: "pointer",
+          textAlign: "left",
+        }}
+      >
+        <span className="label">Deliverables needed ({queries.length})</span>
+        <span
+          style={{
+            fontSize: 12,
+            color: "var(--text-tertiary)",
+            transform: open ? "rotate(180deg)" : "none",
+            transition: "transform 150ms ease",
+          }}
+        >
+          ▾
+        </span>
+      </button>
+      {open && (
+        <div style={{ marginTop: 8 }}>
+          {queries.map((q) => (
+            <div key={q} style={{ fontSize: 13, color: "var(--text-secondary)", padding: "2px 0" }}>
+              · {q}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function StepPRM({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) => void; pushToast: (t: string, k?: Toast["kind"]) => void }) {
   const [connected, setConnected] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [sending, setSending] = useState(false);
+  const [ownersLoading, setOwnersLoading] = useState(true);
   const [lastSync, setLastSync] = useState("2 min ago");
   const [provider, setProvider] = useState<"salesforce" | "hubspot" | "dynamics">("salesforce");
 
+  useEffect(() => {
+    setOwnersLoading(true);
+    const timer = window.setTimeout(() => setOwnersLoading(false), 1000);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   function resync() {
     setSyncing(true);
-    setTimeout(() => { setSyncing(false); setLastSync("just now"); pushToast("PRM resynced — 16 owners confirmed across internal + external partners", "success"); }, 1100);
+    setTimeout(() => { setSyncing(false); setLastSync("just now"); pushToast("PRM resynced: 16 owners confirmed across internal + external partners", "success"); }, 1100);
   }
 
   async function sendRequests() {
@@ -2792,7 +3029,7 @@ function StepPRM({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) =
           }}>SF</div>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontWeight: 500 }}>Salesforce — Carter's Inc. — Sourcing Production Org</span>
+              <span style={{ fontWeight: 500 }}>Salesforce · Carter's Inc. · Sourcing Production Org</span>
               {connected && <span className="chip chip-green"><span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--green-dark)" }} /> Connected</span>}
             </div>
             <div style={{ fontSize: 13, color: "var(--text-tertiary)", marginTop: 2 }}>
@@ -2821,6 +3058,14 @@ function StepPRM({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) =
 
 
       {/* Identified owners */}
+      {ownersLoading ? (
+        <div className="card" style={{ marginTop: 28, padding: 32, textAlign: "center" }}>
+          <span className="spinner" style={{ marginBottom: 14, borderTopColor: "var(--green-dark)" }} />
+          <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>Identifying data owners…</div>
+          <div style={{ fontSize: 13, color: "var(--text-tertiary)" }}>Matching BOM fields to contacts across 1,284 records</div>
+        </div>
+      ) : (
+      <>
       <div style={{ marginTop: 28 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
           <h2 className="section-title">{PRM_OWNERS.length} data owners identified</h2>
@@ -2836,17 +3081,17 @@ function StepPRM({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) =
             <div key={groupName} style={{ marginBottom: 22 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
                 <span className={isExternal ? "chip chip-blue" : "chip chip-green"} style={{ fontSize: 11 }}>
-                  {isExternal ? "External vendors — Pathways Data Request" : "Internal Carter's HQ — Pathways Data Request"}
+                  {isExternal ? "External vendors · Pathways Data Request" : "Internal Carter's HQ · Pathways Data Request"}
                 </span>
                 <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
-                  {groupOwners.length} {isExternal ? "supplier contacts" : "team members"} · scoped upload forms
+                  {groupOwners.length} {isExternal ? "supplier contacts" : "team members"}
                 </span>
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
                 {groupOwners.map((o) => (
                   <div key={o.name} className="card card-hover">
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                         <div style={{
                           width: 38, height: 38, borderRadius: 10,
@@ -2864,12 +3109,7 @@ function StepPRM({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) =
                       </div>
                       <span className={isExternal ? "chip chip-blue" : "chip chip-gray"} style={{ fontSize: 10 }}>{o.sfRole}</span>
                     </div>
-                    <div style={{ borderTop: "1px solid var(--border)", paddingTop: 10 }}>
-                      <div className="label" style={{ marginBottom: 6 }}>Deliverables needed:</div>
-                      {o.queries.map((q) => (
-                        <div key={q} style={{ fontSize: 13, color: "var(--text-secondary)", padding: "2px 0" }}>· {q}</div>
-                      ))}
-                    </div>
+                    <PrmDeliverables queries={o.queries} />
                   </div>
                 ))}
               </div>
@@ -2887,12 +3127,14 @@ function StepPRM({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) =
           <>Send requests →</>
         )}
       </button>
+      </>
+      )}
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// LIBRARY — Completed LCAs (track, rerun with updated data, version)
+// LIBRARY: Completed LCAs (track, rerun with updated data, version)
 // ─────────────────────────────────────────────────────────────────────
 
 type LcaRecord = {
@@ -2934,7 +3176,7 @@ const LCA_LIBRARY: LcaRecord[] = [
     trend: [4555, 4480, 4380, 4290, 4220, 4180], playsAssigned: 4, playsTotal: 6,
   },
   {
-    id: "lca-003", product: "OshKosh B'gosh® Vintage Denim Short — Toddler", sku: "3J451102 · OK-DSH-3T",
+    id: "lca-003", product: "OshKosh B'gosh® Vintage Denim Short, Toddler", sku: "3J451102 · OK-DSH-3T",
     status: "Needs refresh", pillar: "Sustainably Made",
     footprint: 5640, delta: 2.4, baseline: 5510, accuracy: 68,
     version: "v1.1", versions: 2, lastRun: "Feb 10, 2026", nextDue: "Overdue · May 10",
@@ -2961,7 +3203,7 @@ const LCA_LIBRARY: LcaRecord[] = [
     id: "lca-006", product: "Little Planet™ Recycled Polyester Swim Trunk", sku: "335G119 · LP-SWM-5",
     status: "In progress", pillar: "Sustainably Made",
     footprint: 0, delta: 0, baseline: 2410, accuracy: 41,
-    version: "v0.4 (draft)", versions: 1, lastRun: "—", nextDue: "—",
+    version: "v0.4 (draft)", versions: 1, lastRun: "-", nextDue: "-",
     owner: "Alex Johnson", staleness: "fresh",
     trend: [], playsAssigned: 0, playsTotal: 0,
   },
@@ -2989,7 +3231,7 @@ function Library({ go, pushToast }: { go: (s: Step) => void; pushToast: (t: stri
   const totalReduction = LCA_LIBRARY.reduce((s, r) => s + (r.baseline - r.footprint), 0);
 
   function rerun(r: LcaRecord) {
-    pushToast(`Re-running ${r.product} with refreshed Tier-1/Tier-2 data — new version queued`, "info");
+    pushToast(`Re-running ${r.product} with refreshed Tier-1/Tier-2 data; new version queued`, "info");
     setOpenId(null);
   }
   function refreshData(r: LcaRecord) {
@@ -3028,7 +3270,7 @@ function Library({ go, pushToast }: { go: (s: Step) => void; pushToast: (t: stri
       {/* Filter row */}
       <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
         <input
-          className="input" placeholder="Search by product, SKU, or owner…" value={query}
+          className="input" placeholder="Search by product or owner…" value={query}
           onChange={(e) => setQuery(e.target.value)}
           style={{ flex: "1 1 280px", maxWidth: 360 }}
         />
@@ -3090,17 +3332,17 @@ function Library({ go, pushToast }: { go: (s: Step) => void; pushToast: (t: stri
                 <div>
                   <div style={{ fontWeight: 500, fontSize: 14 }}>{r.product}</div>
                   <div style={{ fontSize: 12, color: "var(--text-tertiary)", marginTop: 2 }}>
-                    {r.sku} · <span style={{ color: "var(--green-dark)" }}>{r.pillar}</span> · Owner: {r.owner}
+                    <span style={{ color: "var(--green-dark)" }}>{r.pillar}</span> · Owner: {r.owner}
                   </div>
                 </div>
                 <div><span className={statusChip}>{r.status}</span></div>
                 <div style={{ fontSize: 13, color: "var(--text-secondary)" }} className="tabular">{r.version}</div>
                 <div className="tabular" style={{ fontSize: 14, fontWeight: 500 }}>
-                  {r.footprint > 0 ? r.footprint.toLocaleString() : "—"}
+                  {r.footprint > 0 ? r.footprint.toLocaleString() : "-"}
                 </div>
                 <div>
                   {r.status === "In progress" ? (
-                    <span style={{ fontSize: 13, color: "var(--text-tertiary)" }}>—</span>
+                    <span style={{ fontSize: 13, color: "var(--text-tertiary)" }}>-</span>
                   ) : (
                     <span className={`chip ${r.delta < 0 ? "chip-green" : "chip-red"} tabular`}>
                       {r.delta < 0 ? "▼ " : "▲ "}{Math.abs(r.delta).toFixed(1)}%
@@ -3134,27 +3376,54 @@ function Library({ go, pushToast }: { go: (s: Step) => void; pushToast: (t: stri
                   <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr", gap: 16, paddingTop: 16 }}>
                     {/* Trend sparkline */}
                     <div className="card" style={{ background: "white" }}>
-                      <div className="label" style={{ marginBottom: 10 }}>Footprint trend across versions</div>
-                      <div style={{ display: "flex", alignItems: "flex-end", gap: 8, height: 80, marginBottom: 10 }}>
+                      <div className="label" style={{ marginBottom: 12 }}>Footprint trend across versions</div>
+                      <div style={{ display: "flex", alignItems: "flex-end", gap: 8, height: 56, marginBottom: 8 }}>
                         {r.trend.map((v, i) => {
                           const max = Math.max(...r.trend);
                           const min = Math.min(...r.trend);
-                          const h = ((v - min) / Math.max(1, max - min)) * 60 + 18;
+                          const range = Math.max(1, max - min);
+                          const barH = Math.round(((v - min) / range) * 44 + 12);
                           const isLast = i === r.trend.length - 1;
                           return (
-                            <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-                              <div style={{ fontSize: 10, color: "var(--text-tertiary)" }} className="tabular">{v.toLocaleString()}</div>
-                              <div style={{
-                                width: "100%", height: h, borderRadius: 4,
+                            <div
+                              key={i}
+                              title={`${v.toLocaleString()} g CO₂e`}
+                              style={{
+                                flex: 1,
+                                height: barH,
+                                borderRadius: 4,
                                 background: isLast ? "var(--green-dark)" : "var(--green-light)",
                                 border: "1px solid " + (isLast ? "var(--green-dark)" : "var(--green-border)"),
-                              }} />
-                              <div style={{ fontSize: 10, color: "var(--text-tertiary)" }}>v{(i + 1) / 10 + 0.9 < 1 ? `0.${i + 1}` : `${i + 1}.0`.slice(0, 3)}</div>
-                            </div>
+                              }}
+                            />
                           );
                         })}
                       </div>
-                      <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
+                      <div style={{ display: "flex", gap: 8, marginBottom: 4 }}>
+                        {r.trend.map((v, i) => (
+                          <div
+                            key={i}
+                            style={{
+                              flex: 1,
+                              textAlign: "center",
+                              fontSize: 10,
+                              color: i === r.trend.length - 1 ? "var(--text-primary)" : "var(--text-secondary)",
+                              fontWeight: i === r.trend.length - 1 ? 500 : 400,
+                            }}
+                            className="tabular"
+                          >
+                            {v.toLocaleString()}
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+                        {r.trend.map((_, i) => (
+                          <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 10, color: "var(--text-tertiary)" }}>
+                            v{i + 1}
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>
                         Baseline {r.baseline.toLocaleString()} g → current {r.footprint.toLocaleString()} g · {r.versions} versions on record
                       </div>
                     </div>
@@ -3209,7 +3478,7 @@ function Library({ go, pushToast }: { go: (s: Step) => void; pushToast: (t: stri
                       display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap",
                     }}>
                       <span>
-                        ⚠ Past 90-day refresh cadence. Arvind switched mills in Apr — re-run to update energy mix.
+                        ⚠ Past 90-day refresh cadence. Arvind switched mills in Apr; re-run to update energy mix.
                       </span>
                       <button onClick={() => rerun(r)} className="btn btn-primary btn-sm">Re-run with updated data →</button>
                     </div>
@@ -3243,7 +3512,7 @@ function Library({ go, pushToast }: { go: (s: Step) => void; pushToast: (t: stri
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// SUPPLIER DATA REQUEST — external upload portal (post-email link)
+// SUPPLIER DATA REQUEST: external upload portal (post-email link)
 // ─────────────────────────────────────────────────────────────────────
 
 function formatFileSize(bytes: number): string {
@@ -3262,7 +3531,9 @@ function SupplierUpload({ go, pushToast }: { go: (s: Step) => void; pushToast: (
   const [filled, setFilled] = useState<Record<string, boolean>>({});
   const [uploaded, setUploaded] = useState<Record<string, UploadedFile | null>>({ gots: null, energy: null, packaging: null });
   const [dragOver, setDragOver] = useState<string | null>(null);
+  const [signature, setSignature] = useState("");
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const signatureIsCursive = signature.trim().length > 0;
 
   const fields = [
     { id: "matComp", label: "Primary material composition", help: "Confirm fabric blend for Style 225G731.", prefill: "60% organic cotton (GOTS) + 40% Lenzing™ EcoVero™ viscose" },
@@ -3303,7 +3574,7 @@ function SupplierUpload({ go, pushToast }: { go: (s: Step) => void; pushToast: (
       {step === "email" && (
         <>
           <Eyebrow>Your inbox</Eyebrow>
-          <h1 className="page-title" style={{ marginBottom: 10 }}>Data request — Style 225G731</h1>
+          <h1 className="page-title" style={{ marginBottom: 10 }}>Data request: Style 225G731</h1>
           <p className="body-text" style={{ maxWidth: 720, marginBottom: 28 }}>
             Secure upload link for Style 225G731 from Priya at Carter's.
           </p>
@@ -3329,20 +3600,20 @@ function SupplierUpload({ go, pushToast }: { go: (s: Step) => void; pushToast: (
           </div>
           <div style={{ padding: "22px 24px", borderBottom: "1px solid var(--border)" }}>
             <div style={{ fontSize: 13, color: "var(--text-tertiary)", marginBottom: 6 }}>From <strong style={{ color: "var(--text-primary)" }}>Priya Raghavan</strong> &lt;priya.raghavan@carters.com&gt; via Pathways</div>
-            <div style={{ fontSize: 13, color: "var(--text-tertiary)", marginBottom: 14 }}>Subject: <strong style={{ color: "var(--text-primary)" }}>Data request — Style 225G731 (Little Planet™ 3-Pack Sleep & Play)</strong></div>
+            <div style={{ fontSize: 13, color: "var(--text-tertiary)", marginBottom: 14 }}>Subject: <strong style={{ color: "var(--text-primary)" }}>Data request: Style 225G731 (Little Planet™ 3-Pack Sleep & Play)</strong></div>
             <p style={{ fontSize: 14, lineHeight: 1.7, marginBottom: 14 }}>Hi Sunil,</p>
             <p style={{ fontSize: 14, lineHeight: 1.7, marginBottom: 14 }}>
               We're refreshing the LCA for <strong>Style 225G731</strong> at Shahi Unit 8. Need 4 data points and 3 documents.
             </p>
             <p style={{ fontSize: 14, lineHeight: 1.7, marginBottom: 14 }}>
-              Pre-filled from your last submission — mostly confirm and attach. <strong>~10 min</strong>, no login needed.
+              Pre-filled from your last submission; mostly confirm and attach. <strong>~10 min</strong>, no login needed.
             </p>
             <button onClick={() => setStep("form")} className="btn btn-primary" style={{ marginTop: 6, marginBottom: 16, padding: "12px 22px" }}>
               Open data request →
             </button>
             <p style={{ fontSize: 13, color: "var(--text-tertiary)", lineHeight: 1.6 }}>
               Link expires June 27. Reply to this email with questions.<br />
-              — Priya
+              - Priya
             </p>
           </div>
           <div style={{ padding: "12px 20px", background: "var(--gray-section)", fontSize: 11, color: "var(--text-tertiary)", textAlign: "center" }}>
@@ -3460,8 +3731,22 @@ function SupplierUpload({ go, pushToast }: { go: (s: Step) => void; pushToast: (
               <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 12 }}>
                 By submitting, you confirm this data is accurate. A receipt goes to you and Priya.
               </p>
-              <input className="input" placeholder="Type your full name to sign" style={{ fontSize: 14, marginBottom: 12 }} />
-              <button onClick={() => { setStep("done"); pushToast("Submission received — receipt emailed", "success"); }}
+              <input
+                className="input"
+                value={signature}
+                onChange={(e) => setSignature(e.target.value)}
+                placeholder="Type your full name to sign"
+                style={{
+                  fontSize: signatureIsCursive ? 32 : 14,
+                  fontFamily: signatureIsCursive ? "'Caveat', cursive" : "inherit",
+                  padding: signatureIsCursive ? "18px 14px 8px" : undefined,
+                  borderBottom: signatureIsCursive ? "1px solid var(--border-solid)" : undefined,
+                  borderRadius: signatureIsCursive ? "8px 8px 0 0" : undefined,
+                  background: signatureIsCursive ? "white" : undefined,
+                  marginBottom: 12,
+                }}
+              />
+              <button onClick={() => { setStep("done"); pushToast("Submission received; receipt emailed", "success"); }}
                 className="btn btn-primary" style={{ width: "100%", padding: 14 }}>
                 Submit data
               </button>
@@ -3480,7 +3765,7 @@ function SupplierUpload({ go, pushToast }: { go: (s: Step) => void; pushToast: (
             </div>
             <div className="card" style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.6 }}>
               <div style={{ fontWeight: 500, color: "var(--text-primary)", marginBottom: 6 }}>Why we're asking</div>
-              Carter's LCA for Style 225G731. Your data covers cut &amp; sew only — mill data from Arvind separately.
+              Carter's LCA for Style 225G731. Your data covers cut &amp; sew only; mill data from Arvind separately.
               <div style={{ borderTop: "1px solid var(--border)", marginTop: 12, paddingTop: 12, fontWeight: 500, color: "var(--text-primary)", marginBottom: 6 }}>Need help?</div>
               Reply to the email or contact Priya at <span className="mono">priya.raghavan@carters.com</span>.
             </div>
@@ -3498,7 +3783,7 @@ function SupplierUpload({ go, pushToast }: { go: (s: Step) => void; pushToast: (
           }}>✓</div>
           <h2 className="section-title" style={{ marginBottom: 8 }}>Thank you, Sunil.</h2>
           <p className="body-text" style={{ marginBottom: 20 }}>
-            Submission received. Receipt emailed to you and Priya — no further action unless we follow up.
+            Submission received. Receipt emailed to you and Priya; no further action unless we follow up.
           </p>
           <div style={{ background: "var(--gray-section)", padding: 14, borderRadius: 10, fontSize: 13, color: "var(--text-secondary)", textAlign: "left", marginBottom: 18 }}>
             <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0" }}><span>Reference</span><span className="mono">PW-225G731-SHAHI-0613</span></div>
