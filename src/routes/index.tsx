@@ -1297,7 +1297,7 @@ function Step4({ lcaData, go }: { lcaData: LcaData; go: (s: Step) => void }) {
           <Eyebrow>Footprint Breakdown</Eyebrow>
           <h1 className="page-title">{lcaData.productName} · multi-impact footprint</h1>
           <p className="body-text" style={{ marginTop: 8, maxWidth: 720 }}>
-            Live footprint from Claude + Climatiq. Pick a category to explore stages.
+            Pick an impact category to explore stages and hotspots.
           </p>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
