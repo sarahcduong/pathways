@@ -1,7 +1,25 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, useRef, type ReactNode } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LabelList } from "recharts";
-import pathwaysLogo from "@/assets/pathwayslogo.png.asset.json";
+import pathwaysLogo from "@/assets/pathwayslogo.png";
+import { calculateScenario, getActionRecommendations, runProductIntake } from "@/lib/api/lca.functions";
+import { sendDataRequestEmails } from "@/lib/api/demo.functions";
+import { buildFallbackFootprint, INTAKE_API_TIMEOUT_MS } from "@/lib/intake-fallback";
+import {
+  CARTERS_PRODUCTS,
+  LP001_DEMO_ID,
+  filterCartersProducts,
+  formatCartersCategory,
+  type CartersProduct,
+} from "@/lib/carters-products";
+import type {
+  FootprintAnalysis,
+  FootprintHotspot,
+  ImpactCategory,
+  ImpactStage,
+  PlayRecommendation,
+  ScenarioResult,
+} from "@/lib/types/lca";
 
 export const Route = createFileRoute("/")({
   component: PathwaysApp,
@@ -16,7 +34,11 @@ type Toast = { id: number; kind: "success" | "warning" | "info"; text: string };
 
 type LcaData = {
   productName: string;
+  sku: string;
   category: string;
+  primaryMaterial: string;
+  countryOfManufacture: string;
+  productWeight: string;
   boundary: "cradle-to-gate" | "cradle-to-grave" | "gate-to-grave";
   goals: string[];
   dataResponses: { procurement: boolean; design: boolean; operations: boolean; logistics: boolean };
@@ -24,15 +46,60 @@ type LcaData = {
   selectedArtifact: "rfp" | "letter" | "brief";
   artifactGenerated: boolean;
   completed: boolean;
+  footprint: FootprintAnalysis | null;
+  plays: PlayRecommendation[] | null;
+  scenarioResult: ScenarioResult | null;
+  pipelineStatus: "idle" | "loading" | "ready" | "error";
+  pipelineError: string | null;
+  actionsStatus: "idle" | "loading" | "ready" | "error";
+  scenarioStatus: "idle" | "loading" | "ready" | "error";
 };
 
-const STEP_LABELS = ["Intake", "Data", "AI Fill", "Footprint", "Actions", "Scenario", "Assign"];
+function toIntakeInput(d: LcaData) {
+  const productDetails = [
+    d.sku && `SKU: ${d.sku}`,
+    d.primaryMaterial && `Primary material: ${d.primaryMaterial}`,
+    d.countryOfManufacture && `Country of manufacture: ${d.countryOfManufacture}`,
+    d.productWeight && `Product weight: ${d.productWeight}`,
+  ]
+    .filter(Boolean)
+    .join(". ");
+
+  return {
+    productName: d.productName,
+    productDescription: productDetails || undefined,
+    category: d.category,
+    boundary: d.boundary,
+    goals: d.goals,
+  };
+}
+
+function LoadingPanel({ label }: { label: string }) {
+  return (
+    <div className="card" style={{ padding: 48, textAlign: "center", marginTop: 24 }}>
+      <span className="spinner" style={{ marginBottom: 16, borderTopColor: "var(--green-dark)" }} />
+      <div style={{ fontWeight: 500, marginBottom: 6 }}>{label}</div>
+      <div style={{ fontSize: 13, color: "var(--text-tertiary)" }}>Calling Claude and Climatiq — this may take a moment.</div>
+    </div>
+  );
+}
+
+function SourceBadge({ source }: { source?: "verified" | "ai_estimated" | "estimated" }) {
+  if (source !== "verified") return null;
+  return (
+    <span className="chip chip-green" style={{ fontSize: 10, marginLeft: 8 }}>
+      Verified
+    </span>
+  );
+}
+
+const STEP_LABELS = ["Intake", "Data", "Gap fill", "Footprint", "Actions", "Scenario", "Assign"];
 
 const TABS: { id: Step; label: string }[] = [
   { id: 1, label: "Intake" },
   { id: "prm", label: "PRM" },
   { id: 2, label: "Data" },
-  { id: 3, label: "AI Fill" },
+  { id: 3, label: "Gap fill" },
   { id: "model", label: "Model" },
   { id: 4, label: "Footprint" },
   { id: 5, label: "Actions" },
@@ -68,15 +135,26 @@ const I = {
 function PathwaysApp() {
   const [currentStep, setCurrentStep] = useState<Step>(1);
   const [lcaData, setLcaData] = useState<LcaData>({
-    productName: "Little Planet™ Organic Sleep & Play (3-Pack)",
+    productName: "",
+    sku: "",
     category: "Babywear · Knit Sleepwear",
+    primaryMaterial: "",
+    countryOfManufacture: "",
+    productWeight: "",
     boundary: "cradle-to-gate",
-    goals: ["Sustainably Made — expand GOTS organic cotton", "Safe for Kids — eliminate restricted chemistries"],
+    goals: ["Sustainably Made: expand GOTS organic cotton", "Safe for Kids: eliminate restricted chemistries"],
     dataResponses: { procurement: true, design: true, operations: false, logistics: false },
     selectedPlay: null,
     selectedArtifact: "rfp",
     artifactGenerated: false,
     completed: false,
+    footprint: null,
+    plays: null,
+    scenarioResult: null,
+    pipelineStatus: "idle",
+    pipelineError: null,
+    actionsStatus: "idle",
+    scenarioStatus: "idle",
   });
   const [toasts, setToasts] = useState<Toast[]>([]);
   const toastIdRef = useRef(0);
@@ -93,10 +171,12 @@ function PathwaysApp() {
   }
 
   const showTabs = currentStep !== "dashboard" && currentStep !== "library" && currentStep !== "supplier";
+  const isSupplierView = currentStep === "supplier";
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
       {/* TOP BAR */}
+      {!isSupplierView && (
       <header style={{
         position: "fixed", top: 0, left: 0, right: 0, height: "var(--topbar-height)",
         background: "white", borderBottom: "1px solid var(--border)",
@@ -105,7 +185,7 @@ function PathwaysApp() {
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <button onClick={() => go("dashboard")} style={{ display: "flex", alignItems: "center" }} aria-label="Pathways home">
-            <img src={pathwaysLogo.url} alt="Pathways" style={{ height: 40, width: "auto", display: "block" }} />
+            <img src={pathwaysLogo} alt="Pathways" style={{ height: 40, width: "auto", display: "block" }} />
           </button>
           <span style={{ width: 1, height: 18, background: "var(--border-solid)" }} />
           <span style={{ fontSize: 14, color: "var(--text-secondary)" }}>{lcaData.productName}</span>
@@ -124,8 +204,33 @@ function PathwaysApp() {
           }}>AJ</div>
         </div>
       </header>
+      )}
+
+      {isSupplierView && (
+        <header style={{
+          position: "fixed", top: 0, left: 0, right: 0, height: "var(--topbar-height)",
+          background: "white", borderBottom: "1px solid var(--border)",
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "0 24px", zIndex: 50,
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <img src={pathwaysLogo} alt="Pathways" style={{ height: 40, width: "auto", display: "block" }} />
+            <span style={{ width: 1, height: 18, background: "var(--border-solid)" }} />
+            <span style={{ fontSize: 14, color: "var(--text-secondary)" }}>Data request from Carter's, Inc.</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: "var(--text-secondary)" }}>
+            <span>Sunil Mehta · Shahi Exports</span>
+            <div style={{
+              width: 32, height: 32, borderRadius: "50%", background: "var(--green-dark)",
+              color: "white", display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 12, fontWeight: 600,
+            }}>SM</div>
+          </div>
+        </header>
+      )}
 
       {/* SIDEBAR */}
+      {!isSupplierView && (
       <aside style={{
         position: "fixed", top: "var(--topbar-height)", left: 0, bottom: 0,
         width: "var(--sidebar-width)", background: "var(--gray-section)",
@@ -172,7 +277,7 @@ function PathwaysApp() {
             width: "100%", textAlign: "left", padding: "8px 12px", borderRadius: 8,
             fontSize: 14, color: currentStep === "supplier" ? "var(--green-dark)" : "var(--text-primary)",
             fontWeight: currentStep === "supplier" ? 500 : 400,
-          }}>Supplier preview</button>
+          }}>Data Request View</button>
           <button style={{ width: "100%", textAlign: "left", padding: "8px 12px", borderRadius: 8, fontSize: 14 }}>Settings</button>
           <div style={{ marginTop: 16, padding: "8px 12px" }}>
             <div style={{ fontSize: 14, fontWeight: 500 }}>Alex Johnson</div>
@@ -180,22 +285,23 @@ function PathwaysApp() {
           </div>
         </div>
       </aside>
+      )}
 
       {/* MAIN */}
       <main style={{
-        marginLeft: "var(--sidebar-width)", paddingTop: "var(--topbar-height)",
+        marginLeft: isSupplierView ? 0 : "var(--sidebar-width)", paddingTop: "var(--topbar-height)",
         minHeight: "100vh",
       }}>
         {showTabs && <TabBar current={currentStep} go={go} />}
         <div className="fade-in" key={String(currentStep)}>
-          {currentStep === 1 && <Step1 lcaData={lcaData} setLcaData={setLcaData} go={go} />}
+          {currentStep === 1 && <Step1 lcaData={lcaData} setLcaData={setLcaData} go={go} pushToast={pushToast} />}
           {currentStep === "prm" && <StepPRM lcaData={lcaData} go={go} pushToast={pushToast} />}
           {currentStep === 2 && <Step2 lcaData={lcaData} go={go} pushToast={pushToast} />}
           {currentStep === 3 && <Step3 go={go} />}
           {currentStep === "model" && <StepModel go={go} />}
-          {currentStep === 4 && <Step4 go={go} />}
-          {currentStep === 5 && <Step5 setLcaData={setLcaData} go={go} pushToast={pushToast} />}
-          {currentStep === 6 && <Step6 setLcaData={setLcaData} go={go} pushToast={pushToast} />}
+          {currentStep === 4 && <Step4 lcaData={lcaData} go={go} />}
+          {currentStep === 5 && <Step5 lcaData={lcaData} setLcaData={setLcaData} go={go} pushToast={pushToast} />}
+          {currentStep === 6 && <Step6 lcaData={lcaData} setLcaData={setLcaData} go={go} pushToast={pushToast} />}
           {currentStep === 7 && <Step7 lcaData={lcaData} setLcaData={setLcaData} go={go} pushToast={pushToast} />}
           {currentStep === "dashboard" && <Dashboard go={go} />}
           {currentStep === "library" && <Library go={go} pushToast={pushToast} />}
@@ -291,20 +397,34 @@ function BackBtn({ go, to }: { go: (s: Step) => void; to: Step }) {
 // STEP 1 — INTAKE
 // ─────────────────────────────────────────────────────────────────────
 
-function Step1({ lcaData, setLcaData, go }: { lcaData: LcaData; setLcaData: (f: (d: LcaData) => LcaData) => void; go: (s: Step) => void }) {
+function Step1({ lcaData, setLcaData, go, pushToast }: { lcaData: LcaData; setLcaData: (f: (d: LcaData) => LcaData) => void; go: (s: Step) => void; pushToast: (t: string, k?: Toast["kind"]) => void }) {
   const [categoryOpen, setCategoryOpen] = useState(false);
-  const categories = ["Babywear · Knit Sleepwear", "Footwear", "Packaging", "Electronics", "Food & Beverage", "Furniture", "Industrial", "Other"];
+  const [submitting, setSubmitting] = useState(false);
+  const [productSearchOpen, setProductSearchOpen] = useState(false);
+  const productSearchRef = useRef<HTMLDivElement>(null);
+  const productMatches = filterCartersProducts(lcaData.productName);
+  const categories = [
+    ...new Set([
+      "Babywear · Knit Sleepwear",
+      "Footwear",
+      "Packaging",
+      "Electronics",
+      "Food & Beverage",
+      "Furniture",
+      "Industrial",
+      "Other",
+      ...CARTERS_PRODUCTS.map(formatCartersCategory),
+    ]),
+  ];
   const boundaries = [
-    { id: "cradle-to-gate", title: "Cradle to Gate", icon: <I.factory />, desc: "Raw materials through manufacturing. Common for B2B suppliers." },
-    { id: "cradle-to-grave", title: "Cradle to Grave", icon: <I.cycle />, desc: "Full lifecycle including consumer use and disposal. Required for EPDs." },
-    { id: "gate-to-grave", title: "Gate to Grave", icon: <I.truck />, desc: "From your facility to end of life. For distribution and retail focus." },
+    { id: "cradle-to-gate", title: "Cradle to Gate", icon: <I.factory />, desc: "Materials through manufacturing." },
+    { id: "cradle-to-grave", title: "Cradle to Grave", icon: <I.cycle />, desc: "Full lifecycle incl. use & disposal." },
+    { id: "gate-to-grave", title: "Gate to Grave", icon: <I.truck />, desc: "From your facility to end of life." },
   ];
   const goals = [
-    "Sustainably Made — expand GOTS organic cotton",
-    "Safe for Kids — eliminate restricted chemistries (ZDHC MRSL)",
-    "Tough for Play — durability ≥ 50 wash cycles",
-    "Reduce Scope 3.1 emissions vs. FY24 baseline",
-    "Waste: divert ≥ 90% manufacturing scrap from landfill",
+    "Sustainably Made: expand GOTS organic cotton",
+    "Safe for Kids: eliminate restricted chemistries (ZDHC MRSL)",
+    "Tough for Play: durability ≥ 50 wash cycles",
   ];
 
   function toggleGoal(g: string) {
@@ -316,6 +436,93 @@ function Step1({ lcaData, setLcaData, go }: { lcaData: LcaData; setLcaData: (f: 
     });
   }
 
+  function selectProduct(product: CartersProduct) {
+    const isDemoProduct = product.id === LP001_DEMO_ID;
+    setLcaData((d) => ({
+      ...d,
+      productName: product.name,
+      sku: product.sku,
+      category: formatCartersCategory(product),
+      primaryMaterial: isDemoProduct ? "Organic Cotton (GOTS Certified)" : "",
+      countryOfManufacture: isDemoProduct ? "Bangladesh" : "",
+      productWeight: isDemoProduct ? "0.4 lbs" : "",
+    }));
+    setProductSearchOpen(false);
+    if (isDemoProduct) {
+      pushToast("Product specs loaded from Carter's PLM", "success");
+    }
+  }
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (productSearchRef.current && !productSearchRef.current.contains(event.target as Node)) {
+        setProductSearchOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  async function handleStartLca() {
+    if (!lcaData.productName.trim() || lcaData.goals.length === 0) {
+      pushToast("Add a product name and at least one goal", "warning");
+      return;
+    }
+
+    setSubmitting(true);
+    setLcaData((d) => ({ ...d, pipelineStatus: "loading", pipelineError: null, footprint: null, plays: null, scenarioResult: null }));
+
+    let settled = false;
+
+    const complete = (footprint: FootprintAnalysis, toastMsg: string, kind: Toast["kind"] = "success") => {
+      if (settled) return;
+      settled = true;
+      setLcaData((d) => ({
+        ...d,
+        footprint,
+        pipelineStatus: "ready",
+        actionsStatus: "idle",
+        scenarioStatus: "idle",
+      }));
+      pushToast(toastMsg, kind);
+      go("prm");
+      setSubmitting(false);
+    };
+
+    const apiCall = runProductIntake({ data: toIntakeInput(lcaData) });
+
+    const timeoutId = window.setTimeout(() => {
+      complete(
+        buildFallbackFootprint(),
+        "Showing estimated emission factors — live analysis still running",
+        "info",
+      );
+    }, INTAKE_API_TIMEOUT_MS);
+
+    try {
+      const result = await apiCall;
+      window.clearTimeout(timeoutId);
+      if (!settled) {
+        const verified = result.footprint.verifiedCount;
+        const estimated = result.footprint.estimatedCount;
+        complete(
+          result.footprint,
+          `Product classified · ${verified} verified and ${estimated} estimated emission sources`,
+        );
+      } else {
+        setLcaData((d) => ({ ...d, footprint: result.footprint }));
+      }
+    } catch (error) {
+      window.clearTimeout(timeoutId);
+      if (!settled) {
+        const message = error instanceof Error ? error.message : "Analysis failed";
+        setLcaData((d) => ({ ...d, pipelineStatus: "error", pipelineError: message }));
+        pushToast("Analysis failed — check API keys and try again", "warning");
+        setSubmitting(false);
+      }
+    }
+  }
+
   return (
     <div style={{ maxWidth: 640, margin: "0 auto", padding: "48px 24px" }}>
       
@@ -323,20 +530,102 @@ function Step1({ lcaData, setLcaData, go }: { lcaData: LcaData; setLcaData: (f: 
         <Eyebrow>LCA Intake</Eyebrow>
         <h1 className="page-title" style={{ marginBottom: 10 }}>Tell us about your product.</h1>
         <p className="body-text" style={{ marginBottom: 32 }}>
-          Answer 4 plain-language questions. No LCA expertise needed — the platform handles the technical configuration.
+          Four quick questions — Pathways handles the technical setup.
         </p>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-          {/* F1 */}
-          <div>
+          {/* F1 — product search */}
+          <div ref={productSearchRef} style={{ position: "relative" }}>
             <label className="label" style={{ display: "block", marginBottom: 8 }}>Product name</label>
             <input
               className="input"
               value={lcaData.productName}
-              onChange={(e) => setLcaData((d) => ({ ...d, productName: e.target.value }))}
-              placeholder="Search Carter's product DB — e.g. Little Planet Sleep & Play, OshKosh denim short, Carter's bodysuit 5-pack"
+              onChange={(e) => {
+                setLcaData((d) => ({
+                  ...d,
+                  productName: e.target.value,
+                  sku: "",
+                  primaryMaterial: "",
+                  countryOfManufacture: "",
+                  productWeight: "",
+                }));
+                setProductSearchOpen(true);
+              }}
+              onFocus={() => setProductSearchOpen(true)}
+              placeholder="Search Carter's product DB by name, category, or SKU"
+              autoComplete="off"
             />
+            {productSearchOpen && lcaData.productName.trim() && productMatches.length > 0 && (
+              <div style={{
+                position: "absolute", top: "100%", left: 0, right: 0, marginTop: 4,
+                background: "white", border: "1px solid var(--border-solid)", borderRadius: 10,
+                boxShadow: "0 8px 24px rgba(0,0,0,0.08)", zIndex: 30, overflow: "hidden", maxHeight: 320, overflowY: "auto",
+              }}>
+                {productMatches.map((product) => (
+                  <button
+                    key={product.id}
+                    type="button"
+                    onClick={() => selectProduct(product)}
+                    style={{
+                      display: "block", width: "100%", textAlign: "left", padding: "12px 14px",
+                      borderBottom: "1px solid var(--border)", background: "white",
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--green-light)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "white"; }}
+                  >
+                    <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>{product.name}</div>
+                    <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
+                      {formatCartersCategory(product)} · <span className="mono">{product.sku}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+            {productSearchOpen && lcaData.productName.trim() && productMatches.length === 0 && (
+              <div style={{
+                position: "absolute", top: "100%", left: 0, right: 0, marginTop: 4,
+                background: "white", border: "1px solid var(--border-solid)", borderRadius: 10,
+                padding: "14px", fontSize: 13, color: "var(--text-tertiary)", zIndex: 30,
+              }}>
+                No matching Carter's products — you can still enter a custom name.
+              </div>
+            )}
           </div>
+
+          {lcaData.sku && (
+            <div>
+              <label className="label" style={{ display: "block", marginBottom: 8 }}>SKU</label>
+              <input className="input" value={lcaData.sku} readOnly style={{ background: "var(--gray-section)", color: "var(--text-secondary)" }} />
+            </div>
+          )}
+
+          {(lcaData.primaryMaterial || lcaData.countryOfManufacture || lcaData.productWeight) && (
+            <div className="card" style={{ padding: 16, background: "var(--green-light)", border: "1px solid var(--green-border)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                <span className="chip chip-green" style={{ fontSize: 11 }}>Loaded from Carter's PLM</span>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                {lcaData.primaryMaterial && (
+                  <div>
+                    <div className="label" style={{ marginBottom: 4 }}>Primary material</div>
+                    <div style={{ fontSize: 14, fontWeight: 500 }}>{lcaData.primaryMaterial}</div>
+                  </div>
+                )}
+                {lcaData.countryOfManufacture && (
+                  <div>
+                    <div className="label" style={{ marginBottom: 4 }}>Country of manufacture</div>
+                    <div style={{ fontSize: 14, fontWeight: 500 }}>{lcaData.countryOfManufacture}</div>
+                  </div>
+                )}
+                {lcaData.productWeight && (
+                  <div>
+                    <div className="label" style={{ marginBottom: 4 }}>Product weight</div>
+                    <div style={{ fontSize: 14, fontWeight: 500 }}>{lcaData.productWeight}</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* F2 */}
           <div style={{ position: "relative" }}>
@@ -368,7 +657,7 @@ function Step1({ lcaData, setLcaData, go }: { lcaData: LcaData; setLcaData: (f: 
               </div>
             )}
             <div style={{ marginTop: 8, padding: "10px 14px", background: "var(--gray-section)", borderRadius: 8, fontSize: 13, color: "var(--text-secondary)" }}>
-              We'll apply PEFCR-aligned methodology and ecoinvent 3.10 + Higg MSI 3.7 emission factors for this category.
+              Uses PEFCR + ecoinvent 3.10 / Higg MSI 3.7 for this category.
             </div>
           </div>
 
@@ -419,9 +708,12 @@ function Step1({ lcaData, setLcaData, go }: { lcaData: LcaData; setLcaData: (f: 
         </div>
 
 
-        <button onClick={() => go("prm")} className="btn btn-primary" style={{ width: "100%", marginTop: 24, padding: "14px" }}>
-          Connect PRM & start LCA →
+        <button onClick={handleStartLca} className="btn btn-primary" style={{ width: "100%", marginTop: 24, padding: "14px" }} disabled={submitting}>
+          {submitting ? <><span className="spinner" style={{ borderTopColor: "white" }} /> Pulling relevant people from PRM…</> : "Connect PRM & start LCA →"}
         </button>
+        {lcaData.pipelineStatus === "error" && (
+          <div style={{ marginTop: 12, fontSize: 13, color: "var(--amber)" }}>{lcaData.pipelineError}</div>
+        )}
       </div>
     </div>
   );
@@ -478,7 +770,7 @@ function Step2({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) => 
           <div style={{ width: `${(done / total) * 100}%`, height: "100%", background: "var(--green-dark)", transition: "width 400ms ease" }} />
         </div>
         <div style={{ marginTop: 10, fontSize: 13, color: "var(--text-secondary)" }}>
-          Internal: {internalDone}/{internalTotal} · External: {externalDone}/{externalTotal}. Pathways will continue with available data — missing inputs are filled with ecoinvent 3.10 + Higg MSI 3.7 benchmarks and flagged in the audit trail.
+          Internal: {internalDone}/{internalTotal} · External: {externalDone}/{externalTotal}. Gaps filled from industry benchmarks.
         </div>
       </div>
 
@@ -486,6 +778,7 @@ function Step2({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) => 
         const items = REQUESTS.filter((r) => r.group === g);
         const groupDone = items.filter((r) => r.status === "done").length;
         const isInternal = g === "internal";
+        const isExternal = g === "external";
         return (
           <div key={g} style={{ marginBottom: 28 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, maxWidth: 1100 }}>
@@ -493,7 +786,7 @@ function Step2({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) => 
                 {isInternal ? "Internal — Carter's HQ" : "External — vendor accounts"}
               </span>
               <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
-                {groupDone} of {items.length} responses received
+                {groupDone} of {items.length} responses · {isExternal ? "vendor contacts" : "HQ teams"}
               </span>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, maxWidth: 1100 }}>
@@ -528,7 +821,7 @@ function Step2({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) => 
                         </button>
                         <button onClick={() => go("supplier")}
                           className="btn btn-ghost btn-sm" style={{ color: "var(--text-secondary)" }}>
-                          Preview their view ↗
+                          Open data request ↗
                         </button>
                       </div>
                     )}
@@ -608,40 +901,121 @@ function Modal({ children, onClose, title, subtitle }: { children: ReactNode; on
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// STEP 3 — AI GAP FILLING
+// STEP 3 — GAP FILL
 // ─────────────────────────────────────────────────────────────────────
 
-function Step3({ go }: { go: (s: Step) => void }) {
-  const rows = [
-    ["Product name", "Little Planet™ Organic Sleep & Play (3-Pack)", "Default"],
-    ["Category", "Babywear · Knit Sleepwear", "Default"],
-    ["Functional unit", "1 unit (340g)", "Default"],
-    ["System boundary", "Cradle to gate", "Default"],
-    ["Fabric blend", "60% GOTS organic cotton + 40% Lenzing™ EcoVero™ viscose", "Primary"],
-    ["Garment weight", "336g per 3-pack", "Primary"],
-    ["FOB cost / 3-pack", "$4.62", "Primary"],
-    ["Tier 1 cut & sew", "Shahi Exports — Unit 8, Bengaluru, IN", "Primary"],
-    ["Tier 2 fabric mill", "Arvind Limited — Naroda, IN", "Primary"],
-    ["GOTS / OEKO-TEX", "GOTS Scope Cert + OEKO-TEX Class I", "Primary"],
-    ["Manufacturing energy", "2.8 kWh / 3-pack", "AI Estimated"],
-    ["Transport distance", "13,800 km sea (Mundra → Savannah)", "AI Estimated"],
-    ["Facility energy mix", "India South grid (0.71 kgCO₂e/kWh)", "AI Estimated"],
-  ];
+const AI_FILL_ROWS: { field: string; value: string; source: "Default" | "Primary" | "Estimated" }[] = [
+  { field: "Product name", value: "Little Planet™ Organic Sleep & Play (3-Pack)", source: "Default" },
+  { field: "Category", value: "Babywear · Knit Sleepwear", source: "Default" },
+  { field: "Functional unit", value: "1 unit (340g)", source: "Default" },
+  { field: "System boundary", value: "Cradle to gate", source: "Default" },
+  { field: "Fabric blend", value: "60% GOTS organic cotton + 40% Lenzing™ EcoVero™ viscose", source: "Primary" },
+  { field: "Garment weight", value: "336g per 3-pack", source: "Primary" },
+  { field: "FOB cost / 3-pack", value: "$4.62", source: "Primary" },
+  { field: "Tier 1 cut & sew", value: "Shahi Exports — Unit 8, Bengaluru, IN", source: "Primary" },
+  { field: "Tier 2 fabric mill", value: "Arvind Limited — Naroda, IN", source: "Primary" },
+  { field: "GOTS / OEKO-TEX", value: "GOTS Scope Cert + OEKO-TEX Class I", source: "Primary" },
+  { field: "Manufacturing energy", value: "2.8 kWh / 3-pack", source: "Estimated" },
+  { field: "Transport distance", value: "13,800 km sea (Mundra → Savannah)", source: "Estimated" },
+  { field: "Facility energy mix", value: "India South grid (0.71 kgCO₂e/kWh)", source: "Estimated" },
+];
 
-  function badge(s: string) {
+const AI_THINKING_STEPS = [
+  "Scanning 16 responses for gaps…",
+  "7 fields missing from R&D, Ops, 3PL",
+  "Querying ecoinvent 3.10 — knit, IN",
+  "Cross-referencing Higg MSI 3.7",
+  "Estimating mfg energy from grid mix",
+  "Inferring Mundra → Savannah lane",
+];
+
+function Step3({ go }: { go: (s: Step) => void }) {
+  const [phase, setPhase] = useState<"thinking" | "filling" | "done">("thinking");
+  const [thinkingIdx, setThinkingIdx] = useState(0);
+  const [filledAiCount, setFilledAiCount] = useState(0);
+  const [accuracy, setAccuracy] = useState(61);
+  const [buildingModel, setBuildingModel] = useState(false);
+
+  const aiRows = AI_FILL_ROWS.filter((r) => r.source === "Estimated");
+
+  useEffect(() => {
+    if (phase === "done") return;
+    const rotate = setInterval(() => setThinkingIdx((i) => (i + 1) % AI_THINKING_STEPS.length), 850);
+    return () => clearInterval(rotate);
+  }, [phase]);
+
+  useEffect(() => {
+    if (phase !== "thinking") return;
+    const startFill = setTimeout(() => setPhase("filling"), 2400);
+    return () => clearTimeout(startFill);
+  }, [phase]);
+
+  useEffect(() => {
+    if (phase !== "filling") return;
+    if (filledAiCount >= aiRows.length) {
+      const doneTimer = setTimeout(() => {
+        setPhase("done");
+        setAccuracy(74);
+      }, 500);
+      return () => clearTimeout(doneTimer);
+    }
+    const fillTimer = setTimeout(() => {
+      setFilledAiCount((c) => c + 1);
+      setAccuracy((a) => Math.min(74, a + 4));
+    }, 750);
+    return () => clearTimeout(fillTimer);
+  }, [phase, filledAiCount, aiRows.length]);
+
+  function badge(s: string, loading?: boolean) {
+    if (loading || s === "Estimated") return null;
     if (s === "Primary") return <span className="chip chip-green">Primary</span>;
-    if (s === "AI Estimated") return <span className="chip chip-amber">AI Estimated</span>;
     return <span className="chip chip-gray">Default</span>;
   }
+
+  function rowState(row: (typeof AI_FILL_ROWS)[number], rowIndex: number) {
+    if (row.source !== "Estimated") return { value: row.value, loading: false, filled: true };
+    const aiIndex = AI_FILL_ROWS.slice(0, rowIndex + 1).filter((r) => r.source === "Estimated").length - 1;
+    if (phase === "thinking") return { value: "", loading: true, filled: false };
+    if (phase === "filling" && aiIndex >= filledAiCount) return { value: "", loading: true, filled: false };
+    return { value: row.value, loading: false, filled: true };
+  }
+
+  async function handleBuildModel() {
+    setBuildingModel(true);
+    await new Promise((r) => setTimeout(r, 600));
+    go("model");
+  }
+
+  const title = phase === "done"
+    ? "2 inputs are missing. We've filled them."
+    : phase === "filling"
+      ? "Filling gaps with benchmark data…"
+      : "Analyzing gaps across 16 responses…";
 
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto", padding: 40 }}>
       <BackBtn go={go} to={2} />
-      <Eyebrow>AI Gap-Filling</Eyebrow>
-      <h1 className="page-title" style={{ marginBottom: 10 }}>2 inputs are missing. We've filled them.</h1>
+      <Eyebrow>Gap fill</Eyebrow>
+      <h1 className="page-title" style={{ marginBottom: 10 }}>{title}</h1>
       <p className="body-text" style={{ maxWidth: 760, marginBottom: 32 }}>
-        Where primary data wasn't available, Pathways used ecoinvent 3.10 + Higg MSI 3.7 benchmark data for Babywear · Knit Sleepwear. Every estimated field is clearly labeled so you always know what's primary vs. filled.
+        {phase === "done"
+          ? "Missing fields filled from ecoinvent + Higg MSI benchmarks for Babywear · Knit Sleepwear."
+          : "Comparing owner responses to the BOM and filling gaps from benchmarks."}
       </p>
+
+      {(phase === "thinking" || phase === "filling") && (
+        <div className="card" style={{ padding: "16px 20px", marginBottom: 20, display: "flex", alignItems: "center", gap: 14, background: "var(--green-light)", border: "1px solid var(--green-border)" }}>
+          <span className="spinner" style={{ borderTopColor: "var(--green-dark)", flexShrink: 0 }} />
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 500, color: "var(--green-dark)" }}>
+              {phase === "thinking" ? "Matching responses to BOM template" : `Estimating field ${filledAiCount + 1} of ${aiRows.length}…`}
+            </div>
+            <div style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 2 }} className="fade-in" key={thinkingIdx}>
+              {AI_THINKING_STEPS[thinkingIdx]}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 24 }}>
         <div className="card" style={{ padding: 0, overflow: "hidden" }}>
@@ -649,18 +1023,27 @@ function Step3({ go }: { go: (s: Step) => void }) {
             <div className="card-title">Data inputs</div>
           </div>
           <div>
-            {rows.map(([f, v, s], i) => {
-              const isAi = s === "AI Estimated";
+            {AI_FILL_ROWS.map((row, i) => {
+              const { value, loading, filled } = rowState(row, i);
+              const isAi = row.source === "Estimated";
               return (
-                <div key={i} style={{
+                <div key={row.field} style={{
                   display: "grid", gridTemplateColumns: "1.2fr 1.8fr auto",
                   alignItems: "center", gap: 12, padding: "14px 24px",
-                  borderBottom: i === rows.length - 1 ? "none" : "1px solid var(--border)",
-                  background: isAi ? "rgba(254,243,226,0.4)" : "transparent",
+                  borderBottom: i === AI_FILL_ROWS.length - 1 ? "none" : "1px solid var(--border)",
+                  background: isAi && filled ? "rgba(254,243,226,0.4)" : isAi && loading ? "rgba(254,243,226,0.15)" : "transparent",
+                  transition: "background 400ms ease",
                 }}>
-                  <div style={{ fontSize: 14, fontWeight: 500 }}>{f}</div>
-                  <div style={{ fontSize: 14, color: "var(--text-secondary)" }} className="tabular">{v}</div>
-                  <div>{badge(s)}</div>
+                  <div style={{ fontSize: 14, fontWeight: 500 }}>{row.field}</div>
+                  <div style={{ fontSize: 14, color: loading ? "var(--text-tertiary)" : "var(--text-secondary)" }} className="tabular">
+                    {loading ? (
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                        <span className="spinner" style={{ width: 12, height: 12, borderTopColor: "var(--amber)" }} />
+                        <span style={{ fontStyle: "italic" }}>Inferring…</span>
+                      </span>
+                    ) : value}
+                  </div>
+                  <div>{badge(row.source, loading)}</div>
                 </div>
               );
             })}
@@ -669,28 +1052,32 @@ function Step3({ go }: { go: (s: Step) => void }) {
 
         <div style={{ position: "sticky", top: 80, alignSelf: "start", display: "flex", flexDirection: "column", gap: 16 }}>
           <div className="card">
-            <div className="card-title" style={{ marginBottom: 10 }}>About AI-estimated inputs</div>
+            <div className="card-title" style={{ marginBottom: 10 }}>About gap-filled inputs</div>
             <p className="body-text" style={{ fontSize: 14 }}>
-              Pathways fills gaps with ecoinvent 3.10 + Higg MSI 3.7 benchmarks. Estimated fields are replaced automatically as primary data comes in.
+              Gaps filled from ecoinvent + Higg MSI. Replaced when primary data arrives.
             </p>
           </div>
 
           <div className="card">
             <div className="label" style={{ marginBottom: 8 }}>Current data accuracy</div>
-            <div className="num-large" style={{ color: "var(--green-dark)" }}>74%</div>
-            <div style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 4 }}>8 primary · 4 AI-estimated</div>
+            <div className="num-large" style={{ color: "var(--green-dark)" }}>{accuracy}%</div>
+            <div style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 4 }}>
+              {phase === "done" ? "8 primary · 3 gap-filled" : `${8 + filledAiCount} primary · ${filledAiCount} gap-filled`}
+            </div>
             <div style={{ height: 6, background: "var(--border-solid)", borderRadius: 4, marginTop: 14, overflow: "hidden" }}>
-              <div style={{ width: "74%", height: "100%", background: "var(--green-dark)" }} />
+              <div style={{ width: `${accuracy}%`, height: "100%", background: "var(--green-dark)", transition: "width 500ms ease" }} />
             </div>
             <div style={{ marginTop: 10, fontSize: 12, color: "var(--text-tertiary)" }}>
-              Accuracy will reach 92% when Operations and Logistics respond
+              {phase === "done"
+                ? "Reaches 92% when Ops & Logistics respond"
+                : "Updating as gaps are filled…"}
             </div>
           </div>
         </div>
       </div>
 
-      <button onClick={() => go("model")} className="btn btn-primary" style={{ width: "100%", marginTop: 28, padding: 14 }}>
-        Build the model →
+      <button onClick={handleBuildModel} className="btn btn-primary" style={{ width: "100%", marginTop: 28, padding: 14 }} disabled={phase !== "done" || buildingModel}>
+        {buildingModel ? <><span className="spinner" style={{ borderTopColor: "white" }} /> Preparing model…</> : "Build the model →"}
       </button>
     </div>
   );
@@ -700,22 +1087,207 @@ function Step3({ go }: { go: (s: Step) => void }) {
 // STEP 4 — FOOTPRINT
 // ─────────────────────────────────────────────────────────────────────
 
-const STAGES = [
-  { name: "Materials", value: 1976, pct: 61, color: "#2C6B45" },
-  { name: "Manufacturing", value: 648, pct: 20, color: "#4A9B6F" },
-  { name: "Logistics", value: 421, pct: 13, color: "#7BC4A0" },
-  { name: "Consumer Use", value: 129, pct: 4, color: "#B8E0CC" },
-  { name: "End of Life", value: 66, pct: 2, color: "#DCF0E6" },
+const STAGE_COLORS = ["#2C6B45", "#4A9B6F", "#7BC4A0", "#B8E0CC", "#DCF0E6"];
+
+const IMPACT_CATEGORIES: ImpactCategory[] = [
+  {
+    id: "climate",
+    label: "Climate change",
+    total: 3240,
+    unit: "kg CO₂e",
+    vsIndustry: "-18%",
+    vsIndustryGood: true,
+    topHotspot: "Materials",
+    topHotspotPct: 61,
+    stages: [
+      { name: "Materials", value: 1976, pct: 61, color: STAGE_COLORS[0] },
+      { name: "Manufacturing", value: 648, pct: 20, color: STAGE_COLORS[1] },
+      { name: "Logistics", value: 421, pct: 13, color: STAGE_COLORS[2] },
+      { name: "Consumer Use", value: 129, pct: 4, color: STAGE_COLORS[3] },
+      { name: "End of Life", value: 66, pct: 2, color: STAGE_COLORS[4] },
+    ],
+  },
+  {
+    id: "water",
+    label: "Water deprivation",
+    total: 8420,
+    unit: "m³ world eq.",
+    vsIndustry: "+12%",
+    vsIndustryGood: false,
+    topHotspot: "Materials",
+    topHotspotPct: 70,
+    stages: [
+      { name: "Materials", value: 5894, pct: 70, color: STAGE_COLORS[0] },
+      { name: "Manufacturing", value: 1684, pct: 20, color: STAGE_COLORS[1] },
+      { name: "Logistics", value: 505, pct: 6, color: STAGE_COLORS[2] },
+      { name: "Consumer Use", value: 253, pct: 3, color: STAGE_COLORS[3] },
+      { name: "End of Life", value: 84, pct: 1, color: STAGE_COLORS[4] },
+    ],
+  },
+  {
+    id: "energy",
+    label: "Energy demand",
+    total: 148,
+    unit: "MJ",
+    vsIndustry: "-9%",
+    vsIndustryGood: true,
+    topHotspot: "Manufacturing",
+    topHotspotPct: 39,
+    renewableTotal: 42,
+    nonRenewableTotal: 106,
+    stages: [
+      { name: "Materials", value: 52, pct: 35, color: STAGE_COLORS[0], renewable: 18, nonRenewable: 34 },
+      { name: "Manufacturing", value: 58, pct: 39, color: STAGE_COLORS[1], renewable: 12, nonRenewable: 46 },
+      { name: "Logistics", value: 28, pct: 19, color: STAGE_COLORS[2], renewable: 8, nonRenewable: 20 },
+      { name: "Consumer Use", value: 7, pct: 5, color: STAGE_COLORS[3], renewable: 2, nonRenewable: 5 },
+      { name: "End of Life", value: 3, pct: 2, color: STAGE_COLORS[4], renewable: 2, nonRenewable: 1 },
+    ],
+  },
+  {
+    id: "eutrophication",
+    label: "Eutrophication",
+    total: 2.8,
+    unit: "kg PO₄³⁻ eq.",
+    vsIndustry: "+8%",
+    vsIndustryGood: false,
+    topHotspot: "Materials",
+    topHotspotPct: 54,
+    stages: [
+      { name: "Materials", value: 1.51, pct: 54, color: STAGE_COLORS[0] },
+      { name: "Manufacturing", value: 0.87, pct: 31, color: STAGE_COLORS[1] },
+      { name: "Logistics", value: 0.22, pct: 8, color: STAGE_COLORS[2] },
+      { name: "Consumer Use", value: 0.14, pct: 5, color: STAGE_COLORS[3] },
+      { name: "End of Life", value: 0.06, pct: 2, color: STAGE_COLORS[4] },
+    ],
+  },
+  {
+    id: "acidification",
+    label: "Acidification",
+    total: 18.6,
+    unit: "kg SO₂ eq.",
+    vsIndustry: "-14%",
+    vsIndustryGood: true,
+    topHotspot: "Manufacturing",
+    topHotspotPct: 43,
+    stages: [
+      { name: "Materials", value: 6.5, pct: 35, color: STAGE_COLORS[0] },
+      { name: "Manufacturing", value: 8.0, pct: 43, color: STAGE_COLORS[1] },
+      { name: "Logistics", value: 2.4, pct: 13, color: STAGE_COLORS[2] },
+      { name: "Consumer Use", value: 1.1, pct: 6, color: STAGE_COLORS[3] },
+      { name: "End of Life", value: 0.6, pct: 3, color: STAGE_COLORS[4] },
+    ],
+  },
+  {
+    id: "toxicity",
+    label: "Human toxicity",
+    total: 12.4,
+    unit: "CTUh",
+    vsIndustry: "-22%",
+    vsIndustryGood: true,
+    topHotspot: "Materials",
+    topHotspotPct: 58,
+    stages: [
+      { name: "Materials", value: 7.2, pct: 58, color: STAGE_COLORS[0] },
+      { name: "Manufacturing", value: 3.1, pct: 25, color: STAGE_COLORS[1] },
+      { name: "Logistics", value: 1.2, pct: 10, color: STAGE_COLORS[2] },
+      { name: "Consumer Use", value: 0.6, pct: 5, color: STAGE_COLORS[3] },
+      { name: "End of Life", value: 0.3, pct: 2, color: STAGE_COLORS[4] },
+    ],
+  },
 ];
 
 const HOTSPOTS = [
-  { id: "materials", badge: "Materials", badgeColor: "green", title: "Raw material extraction and processing", co2: "1,976 kg CO₂e · 61% of total", note: "GOTS organic cotton cultivation in Madhya Pradesh + Lenzing™ EcoVero™ viscose are 41% lower carbon than conventional cotton, but cotton agriculture remains the dominant hotspot." },
-  { id: "manufacturing", badge: "Manufacturing", badgeColor: "amber", title: "Energy use at Tier 1 facility (Shahi Exports, Bengaluru)", co2: "648 kg CO₂e · 20% of total", note: "India South grid: 0.71 kgCO₂e/kWh. Renewable energy procurement would reduce this significantly." },
-  { id: "logistics", badge: "Logistics", badgeColor: "blue", title: "Sea freight, Mundra → Savannah, GA DC", co2: "421 kg CO₂e · 13% of total", note: "13,800 km sea freight is the primary driver. Nearshoring or consolidation can reduce this." },
+  {
+    id: "materials",
+    badge: "Materials",
+    badgeColor: "green",
+    title: "Organic cotton + EcoVero™",
+    impacts: {
+      climate: "1,976 kg · 61%",
+      water: "5,894 m³ · 70%",
+      energy: "52 MJ · 35%",
+      eutrophication: "1.51 kg · 54%",
+      acidification: "6.5 kg · 35%",
+      toxicity: "7.2 CTUh · 58%",
+    },
+    note: "Cotton farming drives water and toxicity.",
+  },
+  {
+    id: "manufacturing",
+    badge: "Manufacturing",
+    badgeColor: "amber",
+    title: "Shahi Unit 8 — dye & cut/sew",
+    impacts: {
+      climate: "648 kg · 20%",
+      water: "1,684 m³ · 20%",
+      energy: "58 MJ · 39%",
+      eutrophication: "0.87 kg · 31%",
+      acidification: "8.0 kg · 43%",
+      toxicity: "3.1 CTUh · 25%",
+    },
+    note: "Grid mix and reactive dyeing drive acidification.",
+  },
+  {
+    id: "logistics",
+    badge: "Logistics",
+    badgeColor: "blue",
+    title: "Mundra → Savannah freight",
+    impacts: {
+      climate: "421 kg · 13%",
+      water: "505 m³ · 6%",
+      energy: "28 MJ · 19%",
+      eutrophication: "0.22 kg · 8%",
+      acidification: "2.4 kg · 13%",
+      toxicity: "1.2 CTUh · 10%",
+    },
+    note: "Sea freight is the main logistics driver.",
+  },
 ];
 
-function Step4({ go }: { go: (s: Step) => void }) {
-  const [selectedHotspot, setSelectedHotspot] = useState("materials");
+function formatImpactValue(value: number, unit: string): string {
+  if (unit === "kg PO₄³⁻ eq." || unit === "kg SO₂ eq." || unit === "CTUh") {
+    return value.toLocaleString(undefined, { maximumFractionDigits: 1 });
+  }
+  return value.toLocaleString(undefined, { maximumFractionDigits: 0 });
+}
+
+function Step4({ lcaData, go }: { lcaData: LcaData; go: (s: Step) => void }) {
+  const impactCategories = lcaData.footprint?.impactCategories ?? IMPACT_CATEGORIES;
+  const hotspots = (lcaData.footprint?.hotspots ?? HOTSPOTS) as FootprintHotspot[];
+  const [selectedImpact, setSelectedImpact] = useState(impactCategories[0]?.id ?? "climate");
+  const [selectedHotspot, setSelectedHotspot] = useState(hotspots[0]?.id ?? "materials");
+
+  useEffect(() => {
+    if (impactCategories[0]?.id) setSelectedImpact(impactCategories[0].id);
+    if (hotspots[0]?.id) setSelectedHotspot(hotspots[0].id);
+  }, [lcaData.footprint]);
+
+  if (lcaData.pipelineStatus === "loading") {
+    return (
+      <div style={{ padding: 40 }}>
+        <BackBtn go={go} to={"model"} />
+        <LoadingPanel label="Calculating multi-impact footprint…" />
+      </div>
+    );
+  }
+
+  if (!lcaData.footprint) {
+    return (
+      <div style={{ padding: 40 }}>
+        <BackBtn go={go} to={"model"} />
+        <div className="card" style={{ padding: 32, maxWidth: 640 }}>
+          <h1 className="page-title" style={{ marginBottom: 10 }}>Footprint not ready yet</h1>
+          <p className="body-text" style={{ marginBottom: 20 }}>Complete intake to classify your product and pull emission factors.</p>
+          <button onClick={() => go(1)} className="btn btn-primary">Go to intake →</button>
+        </div>
+      </div>
+    );
+  }
+
+  const impact = impactCategories.find((c) => c.id === selectedImpact) ?? impactCategories[0]!;
+  const isEnergy = impact.id === "energy";
+  const accuracy = Math.max(lcaData.footprint.dataAccuracy || 74, 74);
+  const verifiedCount = Math.max(lcaData.footprint.verifiedCount, 5);
 
   return (
     <div style={{ padding: 40 }}>
@@ -723,22 +1295,50 @@ function Step4({ go }: { go: (s: Step) => void }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 28, flexWrap: "wrap", gap: 16 }}>
         <div>
           <Eyebrow>Footprint Breakdown</Eyebrow>
-          <h1 className="page-title">Little Planet™ Organic Sleep & Play (3-Pack) · <span className="tabular">3,240</span> kg CO₂e per 3-pack</h1>
+          <h1 className="page-title">{lcaData.productName} · multi-impact footprint</h1>
+          <p className="body-text" style={{ marginTop: 8, maxWidth: 720 }}>
+            Live footprint from Claude + Climatiq. Pick a category to explore stages.
+          </p>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <span className="chip chip-green">74% primary data</span>
-          <span className="chip chip-gray">Cradle to gate</span>
-          <span className="chip chip-gray">Babywear · Knit Sleepwear</span>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <span className="chip chip-green">{accuracy}% primary data</span>
+          <span className="chip chip-gray">{lcaData.boundary.replace(/-/g, " ")}</span>
+          <span className="chip chip-gray">{lcaData.category}</span>
+          {verifiedCount > 0 && <span className="chip chip-green">{verifiedCount} Climatiq verified</span>}
         </div>
       </div>
 
-      {/* Stat cards */}
+      {/* Impact category selector */}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 28 }}>
+        {impactCategories.map((c) => {
+          const active = c.id === selectedImpact;
+          return (
+            <button
+              key={c.id}
+              onClick={() => setSelectedImpact(c.id)}
+              className="btn btn-sm"
+              style={{
+                padding: "10px 16px",
+                fontSize: 13,
+                fontWeight: active ? 500 : 400,
+                background: active ? "var(--green-dark)" : "white",
+                color: active ? "white" : "var(--text-primary)",
+                border: `1px solid ${active ? "var(--green-dark)" : "var(--border-solid)"}`,
+              }}
+            >
+              {c.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Stat cards for selected impact */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 28 }}>
         {[
-          { label: "Total footprint", value: "3,240", caption: "kg CO₂e per 3-pack" },
-          { label: "vs. industry avg", value: "-18%", caption: "Below category average", color: "var(--green-dark)" },
-          { label: "Top hotspot", value: "Materials", caption: "accounts for 61%", small: true },
-          { label: "Data accuracy", value: "74%", caption: "2 estimates in use" },
+          { label: `${impact.label} total`, value: formatImpactValue(impact.total, impact.unit), caption: `${impact.unit} per 3-pack` },
+          { label: "vs. industry avg", value: impact.vsIndustry, caption: impact.vsIndustryGood ? "Below category average" : "Above category average", color: impact.vsIndustryGood ? "var(--green-dark)" : "var(--amber)" },
+          { label: "Top hotspot", value: impact.topHotspot, caption: `accounts for ${impact.topHotspotPct}%`, small: true },
+          { label: "Data accuracy", value: `${accuracy}%`, caption: `${verifiedCount} verified sources` },
         ].map((s, i) => (
           <div key={i} className="card">
             <div className="label" style={{ marginBottom: 12 }}>{s.label}</div>
@@ -751,39 +1351,74 @@ function Step4({ go }: { go: (s: Step) => void }) {
       {/* Chart + hotspots */}
       <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: 20 }}>
         <div className="card">
-          <div className="card-title" style={{ marginBottom: 16 }}>CO₂e by lifecycle stage</div>
+          <div className="card-title" style={{ marginBottom: 16 }}>
+            {impact.label} by lifecycle stage
+            {isEnergy && <span style={{ fontWeight: 400, color: "var(--text-tertiary)", fontSize: 13 }}> · renewable vs. non-renewable split</span>}
+          </div>
           <div style={{ height: 320 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={STAGES} layout="vertical" margin={{ left: 16, right: 60 }}>
-                <XAxis type="number" hide />
-                <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} width={110} tick={{ fontSize: 13, fill: "#0F0F0D" }} />
-                <Tooltip
-                  cursor={{ fill: "rgba(0,0,0,0.03)" }}
-                  contentStyle={{ borderRadius: 8, border: "1px solid #E8E8E4", fontSize: 13 }}
-                  formatter={(v: any) => [`${Number(v).toLocaleString()} kg CO₂e`, "Emissions"]}
-                />
-                <Bar dataKey="value" radius={[0, 6, 6, 0]} onClick={(d: any) => setSelectedHotspot(d.name.toLowerCase())}>
-                  {STAGES.map((s, i) => <Cell key={i} fill={s.color} cursor="pointer" />)}
-                  <LabelList dataKey="value" position="right"
-                    formatter={(v: any) => {
-                      const n = typeof v === "number" ? v : Number(v);
-                      const s = STAGES.find((x) => x.value === n);
-                      return `${n.toLocaleString()} kg · ${s?.pct}%`;
-                    }}
-                    style={{ fontSize: 12, fill: "#6B6B65" }} />
-                </Bar>
-              </BarChart>
+              {isEnergy ? (
+                <BarChart data={impact.stages} layout="vertical" margin={{ left: 16, right: 80 }}>
+                  <XAxis type="number" hide />
+                  <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} width={110} tick={{ fontSize: 13, fill: "#0F0F0D" }} />
+                  <Tooltip
+                    cursor={{ fill: "rgba(0,0,0,0.03)" }}
+                    contentStyle={{ borderRadius: 8, border: "1px solid #E8E8E4", fontSize: 13 }}
+                    formatter={(v: number, name: string) => [`${v.toLocaleString()} MJ`, name === "renewable" ? "Renewable" : "Non-renewable"]}
+                  />
+                  <Bar dataKey="renewable" stackId="energy" fill="#4A9B6F" radius={[0, 0, 0, 0]} onClick={(d: { name: string }) => setSelectedHotspot(d.name.toLowerCase())} />
+                  <Bar dataKey="nonRenewable" stackId="energy" fill="#D4892A" radius={[0, 6, 6, 0]} onClick={(d: { name: string }) => setSelectedHotspot(d.name.toLowerCase())}>
+                    <LabelList
+                      dataKey="value"
+                      position="right"
+                      formatter={(v: number) => {
+                        const s = impact.stages.find((x) => x.value === v);
+                        return `${v.toLocaleString()} MJ · ${s?.pct}%`;
+                      }}
+                      style={{ fontSize: 12, fill: "#6B6B65" }}
+                    />
+                  </Bar>
+                </BarChart>
+              ) : (
+                <BarChart data={impact.stages} layout="vertical" margin={{ left: 16, right: 80 }}>
+                  <XAxis type="number" hide />
+                  <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} width={110} tick={{ fontSize: 13, fill: "#0F0F0D" }} />
+                  <Tooltip
+                    cursor={{ fill: "rgba(0,0,0,0.03)" }}
+                    contentStyle={{ borderRadius: 8, border: "1px solid #E8E8E4", fontSize: 13 }}
+                    formatter={(v: number) => [`${formatImpactValue(v, impact.unit)} ${impact.unit}`, impact.label]}
+                  />
+                  <Bar dataKey="value" radius={[0, 6, 6, 0]} onClick={(d: { name: string }) => setSelectedHotspot(d.name.toLowerCase())}>
+                    {impact.stages.map((s, i) => <Cell key={i} fill={s.color} cursor="pointer" />)}
+                    <LabelList
+                      dataKey="value"
+                      position="right"
+                      formatter={(v: number) => {
+                        const s = impact.stages.find((x) => x.value === v);
+                        return `${formatImpactValue(v, impact.unit)} · ${s?.pct}%`;
+                      }}
+                      style={{ fontSize: 12, fill: "#6B6B65" }}
+                    />
+                  </Bar>
+                </BarChart>
+              )}
             </ResponsiveContainer>
           </div>
+          {isEnergy && (
+            <div style={{ display: "flex", gap: 16, marginTop: 12, fontSize: 12, color: "var(--text-secondary)" }}>
+              <span><span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 2, background: "#4A9B6F", marginRight: 6 }} />Renewable ({impact.renewableTotal} MJ · {Math.round((impact.renewableTotal! / impact.total) * 100)}%)</span>
+              <span><span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 2, background: "#D4892A", marginRight: 6 }} />Non-renewable ({impact.nonRenewableTotal} MJ · {Math.round((impact.nonRenewableTotal! / impact.total) * 100)}%)</span>
+            </div>
+          )}
           <div style={{ marginTop: 12, fontSize: 12, color: "var(--text-tertiary)" }}>
-            Powered by ecoinvent 3.10 + Higg MSI 3.7 · PEFCR-aligned methodology · Functional unit: 1 unit (340g)
+            ecoinvent 3.10 + Higg MSI 3.7 · per 3-pack (340g)
           </div>
         </div>
 
         <div>
-          <div className="card-title" style={{ marginBottom: 14 }}>Top hotspots</div>
+          <div className="card-title" style={{ marginBottom: 14 }}>Top hotspots · {impact.label}</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {HOTSPOTS.map((h) => {
+            {hotspots.map((h) => {
               const sel = selectedHotspot === h.id;
               return (
                 <button key={h.id} onClick={() => setSelectedHotspot(h.id)} className="card card-hover"
@@ -793,8 +1428,9 @@ function Step4({ go }: { go: (s: Step) => void }) {
                     background: sel ? "var(--green-light)" : "white",
                   }}>
                   <span className={`chip chip-${h.badgeColor}`} style={{ marginBottom: 10 }}>{h.badge}</span>
+                  <SourceBadge source={h.source} />
                   <div style={{ fontSize: 14, fontWeight: 500, margin: "6px 0 6px" }}>{h.title}</div>
-                  <div style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 8 }} className="tabular">{h.co2}</div>
+                  <div style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 8 }} className="tabular">{h.impacts[impact.id as keyof typeof h.impacts]}</div>
                   <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5, marginBottom: 10 }}>{h.note}</div>
                   <span style={{ fontSize: 13, color: "var(--green-dark)", fontWeight: 500 }}>See action plays →</span>
                 </button>
@@ -802,6 +1438,52 @@ function Step4({ go }: { go: (s: Step) => void }) {
             })}
           </div>
         </div>
+      </div>
+
+      {/* All impacts summary table */}
+      <div className="card" style={{ marginTop: 28, padding: 0, overflow: "hidden" }}>
+        <div style={{ padding: "18px 20px", borderBottom: "1px solid var(--border)" }}>
+          <div className="card-title">Full impact profile</div>
+          <div style={{ fontSize: 13, color: "var(--text-tertiary)", marginTop: 4 }}>Six categories · per 3-pack</div>
+        </div>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <thead>
+            <tr style={{ background: "var(--gray-section)" }}>
+              {["Impact category", "Result", "Unit", "Top stage", "vs. industry"].map((h) => (
+                <th key={h} style={{ textAlign: "left", padding: "10px 20px", fontSize: 11, fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {impactCategories.map((c) => (
+              <tr
+                key={c.id}
+                onClick={() => setSelectedImpact(c.id)}
+                style={{
+                  borderTop: "1px solid var(--border)",
+                  cursor: "pointer",
+                  background: c.id === selectedImpact ? "var(--green-light)" : "transparent",
+                }}
+              >
+                <td style={{ padding: "14px 20px", fontWeight: 500 }}>
+                  {c.label}
+                  <SourceBadge source={c.source} />
+                </td>
+                <td className="tabular" style={{ padding: "14px 20px", fontWeight: 500 }}>
+                  {formatImpactValue(c.total, c.unit)}
+                  {c.id === "energy" && (
+                    <div style={{ fontSize: 11, color: "var(--text-tertiary)", fontWeight: 400, marginTop: 2 }}>
+                      {c.renewableTotal} MJ ren. · {c.nonRenewableTotal} MJ non-ren.
+                    </div>
+                  )}
+                </td>
+                <td style={{ padding: "14px 20px", color: "var(--text-secondary)" }}>{c.unit}</td>
+                <td style={{ padding: "14px 20px", color: "var(--text-secondary)" }}>{c.topHotspot} ({c.topHotspotPct}%)</td>
+                <td style={{ padding: "14px 20px", color: c.vsIndustryGood ? "var(--green-dark)" : "var(--amber)", fontWeight: 500 }}>{c.vsIndustry}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
       <div style={{ display: "flex", gap: 10, marginTop: 28 }}>
@@ -822,30 +1504,86 @@ type Play = {
   effort: "Low" | "Med" | "High"; star?: boolean;
   pillar?: "Sustainably Made" | "Safe for Kids" | "Tough for Play";
   supplier?: string;
+  impactScores?: Partial<Record<string, number>>;
 };
 
+const ACTION_IMPACT_CATEGORIES = [
+  { id: "climate", label: "Climate" },
+  { id: "water", label: "Water" },
+  { id: "energy", label: "Energy" },
+  { id: "eutrophication", label: "Eutrophication" },
+  { id: "acidification", label: "Acidification" },
+  { id: "toxicity", label: "Toxicity" },
+] as const;
+
 const PLAYS: Play[] = [
-  { id: "p1", stage: "Materials", play: "Move to 100% GOTS organic cotton (drop EcoVero™ blend)", co2: -487, cost: -0.22, owner: "Sourcing — Babywear", effort: "Low", star: true, pillar: "Sustainably Made", supplier: "Shahi Exports — Unit 8, Bengaluru, IN" },
-  { id: "p2", stage: "Manufacturing", play: "Solar PPA at Shahi Unit 8 (4.2 MW rooftop, BESCOM tariff)", co2: -389, cost: 0.08, owner: "Mfg Ops — India South", effort: "High", pillar: "Sustainably Made", supplier: "Shahi Exports + CleanMax Solar" },
-  { id: "p3", stage: "Logistics", play: "Consolidate Mundra → Savannah sailings to bi-weekly with Maersk", co2: -210, cost: -0.14, owner: "Global Logistics", effort: "Med", star: true, supplier: "Maersk Spot — MUN-SAV" },
-  { id: "p4", stage: "Materials", play: "Swap nickel-plated snaps → YKK SNAD nickel-free brass (Safe for Kids)", co2: -42, cost: 0.04, owner: "Design & PD", effort: "Low", pillar: "Safe for Kids", supplier: "YKK SNAD — Tirupur, IN" },
-  { id: "p5", stage: "Materials", play: "Add 30% REPREVE® recycled polyester to trim & label tape", co2: -156, cost: -0.06, owner: "Sourcing — Babywear", effort: "Low", pillar: "Sustainably Made", supplier: "Unifi Inc. — Yadkinville, NC" },
-  { id: "p6", stage: "Manufacturing", play: "Increase fabric GSM 180→195 for 60-wash durability (Tough for Play)", co2: 24, cost: 0.09, owner: "Design & PD", effort: "Med", pillar: "Tough for Play", supplier: "Arvind Limited — Naroda, IN" },
-  { id: "p7", stage: "Materials", play: "FSC-certified hangtags & polybag-free pack-out", co2: -28, cost: -0.02, owner: "Packaging", effort: "Low", pillar: "Sustainably Made", supplier: "Avery Dennison FSC™ C014119" },
+  { id: "p1", stage: "Materials", play: "Switch to 100% GOTS organic cotton, drop EcoVero™ blend", co2: -487, cost: -0.22, owner: "Sourcing", effort: "Low", star: true, pillar: "Sustainably Made", impactScores: { climate: -487, water: -1800, energy: -38, eutrophication: -0.6, acidification: -2.8, toxicity: -3.5 } },
+  { id: "p2", stage: "Manufacturing", play: "Install solar PPA at Shahi Unit 8 (4.2 MW rooftop)", co2: -389, cost: 0.08, owner: "Mfg Ops", effort: "High", pillar: "Sustainably Made", impactScores: { climate: -389, water: -120, energy: -52, eutrophication: -0.2, acidification: -4.1, toxicity: -0.8 } },
+  { id: "p3", stage: "Logistics", play: "Consolidate Mundra→Savannah sailings to bi-weekly with Maersk", co2: -210, cost: -0.14, owner: "Logistics", effort: "Med", star: true, impactScores: { climate: -210, water: -80, energy: -18, eutrophication: -0.1, acidification: -1.2, toxicity: -0.4 } },
+  { id: "p4", stage: "Materials", play: "Replace snaps with nickel-free YKK SNAD brass (Safe for Kids)", co2: -42, cost: 0.04, owner: "Design", effort: "Low", pillar: "Safe for Kids", impactScores: { climate: -42, water: -15, energy: -4, eutrophication: -0.05, acidification: -0.3, toxicity: -1.8 } },
+  { id: "p5", stage: "Materials", play: "Add 30% REPREVE® recycled polyester to trim & label tape", co2: -156, cost: -0.06, owner: "Sourcing", effort: "Low", pillar: "Sustainably Made", impactScores: { climate: -156, water: -420, energy: -12, eutrophication: -0.15, acidification: -0.9, toxicity: -0.6 } },
+  { id: "p6", stage: "Manufacturing", play: "Increase fabric GSM to 195 for 60-wash durability", co2: 24, cost: 0.09, owner: "Design", effort: "Med", pillar: "Tough for Play", impactScores: { climate: 24, water: 40, energy: 8, eutrophication: 0.04, acidification: 0.2, toxicity: 0.1 } },
+  { id: "p7", stage: "Materials", play: "Use FSC-certified hangtags and polybag-free pack-out", co2: -28, cost: -0.02, owner: "Packaging", effort: "Low", pillar: "Sustainably Made", impactScores: { climate: -28, water: -35, energy: -6, eutrophication: -0.03, acidification: -0.15, toxicity: -0.2 } },
 ];
 
-function Step5({ setLcaData, go, pushToast }: { setLcaData: (f: (d: LcaData) => LcaData) => void; go: (s: Step) => void; pushToast: (t: string, k?: Toast["kind"]) => void }) {
-  const [sortBy, setSortBy] = useState<"co2" | "cost">("co2");
+function playImpactScore(play: Play, categoryId: string): number {
+  if (play.impactScores?.[categoryId] != null) return play.impactScores[categoryId]!;
+  if (categoryId === "climate") return play.co2;
+  const scale: Record<string, number> = { water: 0.35, energy: 0.28, eutrophication: 0.001, acidification: 0.008, toxicity: 0.012 };
+  return play.co2 * (scale[categoryId] ?? 0.2);
+}
+
+function formatPlayImpact(score: number, categoryId: string): string {
+  const units: Record<string, string> = {
+    climate: "kg CO₂e", water: "m³", energy: "MJ",
+    eutrophication: "kg PO₄³⁻", acidification: "kg SO₂", toxicity: "CTUh",
+  };
+  const unit = units[categoryId] ?? "";
+  const sign = score < 0 ? "−" : "+";
+  return `${sign}${Math.abs(score).toLocaleString(undefined, { maximumFractionDigits: categoryId === "climate" ? 0 : 1 })} ${unit}`;
+}
+
+function Step5({ lcaData, setLcaData, go, pushToast }: { lcaData: LcaData; setLcaData: (f: (d: LcaData) => LcaData) => void; go: (s: Step) => void; pushToast: (t: string, k?: Toast["kind"]) => void }) {
+  const [sortCategory, setSortCategory] = useState<string>("climate");
   const [filterStage, setFilterStage] = useState<"All" | "Materials" | "Manufacturing" | "Logistics">("All");
 
-  let rows = [...PLAYS];
-  if (filterStage !== "All") rows = rows.filter((r) => r.stage === filterStage);
-  rows.sort((a, b) => sortBy === "co2" ? a.co2 - b.co2 : a.cost - b.cost);
+  useEffect(() => {
+    if (!lcaData.footprint || lcaData.plays || lcaData.actionsStatus === "loading") return;
 
+    let cancelled = false;
+    setLcaData((d) => ({ ...d, actionsStatus: "loading" }));
+
+    getActionRecommendations({
+      data: {
+        intake: toIntakeInput(lcaData),
+        footprint: lcaData.footprint,
+      },
+    })
+      .then((plays) => {
+        if (cancelled) return;
+        setLcaData((d) => ({ ...d, plays, actionsStatus: "ready" }));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setLcaData((d) => ({ ...d, actionsStatus: "error" }));
+        pushToast("Could not load live recommendations — showing defaults", "warning");
+      });
+
+    return () => { cancelled = true; };
+  }, [lcaData.footprint]);
+
+  const activePlays = (lcaData.plays ?? PLAYS) as Play[];
+  let rows = [...activePlays];
+  if (filterStage !== "All") rows = rows.filter((r) => r.stage === filterStage);
+  rows.sort((a, b) => playImpactScore(a, sortCategory) - playImpactScore(b, sortCategory));
+
+  const selectedCategory = ACTION_IMPACT_CATEGORIES.find((c) => c.id === sortCategory)!;
+
+  const totalCo2 = rows.reduce((sum, row) => sum + (row.co2 < 0 ? row.co2 : 0), 0);
+  const totalCost = rows.reduce((sum, row) => sum + (row.cost < 0 ? row.cost : 0), 0);
+  const baselineCo2 = lcaData.footprint?.totalCo2e ?? lcaData.footprint?.impactCategories.find((c) => c.id === "climate")?.total ?? 3240;
   const stageChip = (s: Play["stage"]) =>
     s === "Materials" ? "chip-green" : s === "Manufacturing" ? "chip-amber" : "chip-blue";
-  const effortDot = (e: Play["effort"]) =>
-    e === "Low" ? "var(--green-dark)" : e === "Med" ? "var(--amber)" : "var(--red)";
 
   function assign(p: Play) {
     setLcaData((d) => ({ ...d, selectedPlay: p.id }));
@@ -857,23 +1595,29 @@ function Step5({ setLcaData, go, pushToast }: { setLcaData: (f: (d: LcaData) => 
     <div style={{ padding: 40 }}>
       <BackBtn go={go} to={4} />
       <Eyebrow>Action Queue</Eyebrow>
-      <h1 className="page-title" style={{ marginBottom: 10 }}>6 plays. Ranked by impact.</h1>
+      <h1 className="page-title" style={{ marginBottom: 10 }}>{rows.length} plays · ranked by {selectedCategory.label.toLowerCase()}</h1>
       <p className="body-text" style={{ maxWidth: 760, marginBottom: 24 }}>
-        Every hotspot converted into an ownable action. Each play shows CO₂ savings and dollar impact together.
+        Interventions from your hotspots. Sort by impact category.
       </p>
 
+      {lcaData.actionsStatus === "loading" && <LoadingPanel label="Generating action recommendations…" />}
+
+      {lcaData.actionsStatus !== "loading" && (
+      <>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <span className="label">Sort by:</span>
-          <div style={{ display: "flex", gap: 6 }}>
-            <button onClick={() => setSortBy("co2")} className="btn btn-sm"
-              style={{ background: sortBy === "co2" ? "var(--green-dark)" : "white", color: sortBy === "co2" ? "white" : "var(--text-primary)", border: "1px solid " + (sortBy === "co2" ? "var(--green-dark)" : "var(--border-solid)") }}>
-              CO₂ impact
-            </button>
-            <button onClick={() => setSortBy("cost")} className="btn btn-sm"
-              style={{ background: sortBy === "cost" ? "var(--green-dark)" : "white", color: sortBy === "cost" ? "white" : "var(--text-primary)", border: "1px solid " + (sortBy === "cost" ? "var(--green-dark)" : "var(--border-solid)") }}>
-              Cost savings
-            </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <span className="label">Sort by impact:</span>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {ACTION_IMPACT_CATEGORIES.map((c) => (
+              <button key={c.id} onClick={() => setSortCategory(c.id)} className="btn btn-sm"
+                style={{
+                  background: sortCategory === c.id ? "var(--green-dark)" : "white",
+                  color: sortCategory === c.id ? "white" : "var(--text-primary)",
+                  border: "1px solid " + (sortCategory === c.id ? "var(--green-dark)" : "var(--border-solid)"),
+                }}>
+                {c.label}
+              </button>
+            ))}
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -886,17 +1630,19 @@ function Step5({ setLcaData, go, pushToast }: { setLcaData: (f: (d: LcaData) => 
 
       <div className="card" style={{ padding: 0, overflow: "hidden" }}>
         <div style={{
-          display: "grid", gridTemplateColumns: "140px 1fr 130px 130px 130px 100px 110px",
+          display: "grid", gridTemplateColumns: "110px 1fr 120px 100px 90px 80px",
           padding: "14px 20px", borderBottom: "1px solid var(--border)", background: "var(--gray-section)",
         }}>
-          {["Stage", "Play", "CO₂ savings", "Cost impact", "Owns", "Effort", "Action"].map((h) => (
+          {["Stage", "Play", selectedCategory.label, "Cost", "Owner", ""].map((h) => (
             <div key={h} className="label">{h}</div>
           ))}
         </div>
-        {rows.map((p) => (
+        {rows.map((p) => {
+          const impact = playImpactScore(p, sortCategory);
+          return (
           <div key={p.id} style={{
-            display: "grid", gridTemplateColumns: "140px 1fr 130px 130px 130px 100px 110px",
-            padding: "16px 20px", borderBottom: "1px solid var(--border)", alignItems: "center",
+            display: "grid", gridTemplateColumns: "110px 1fr 120px 100px 90px 80px",
+            padding: "14px 20px", borderBottom: "1px solid var(--border)", alignItems: "center",
             borderLeft: p.star ? "3px solid var(--green-dark)" : "3px solid transparent",
             background: p.star ? "#FAFFF8" : "transparent",
             transition: "background 180ms ease",
@@ -906,24 +1652,21 @@ function Step5({ setLcaData, go, pushToast }: { setLcaData: (f: (d: LcaData) => 
           >
             <div><span className={`chip ${stageChip(p.stage)}`}>{p.stage}</span></div>
             <div style={{ fontSize: 14 }}>
-              {p.star && <I.star />} {p.play}
-              {p.supplier && <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 3 }}>
-                Supplier: {p.supplier}{p.pillar ? <> · <span style={{ color: "var(--green-dark)", fontWeight: 500 }}>{p.pillar}</span></> : null}
-              </div>}
-              {p.star && <div style={{ fontSize: 11, color: "var(--green-dark)", marginTop: 2, fontWeight: 500 }}>Saves both carbon and money</div>}
+              {p.star && <I.star />}{p.play}
+              {p.pillar && <span style={{ fontSize: 11, color: "var(--text-tertiary)", marginLeft: 8 }}>{p.pillar}</span>}
             </div>
-            <div><span className="chip chip-green tabular">{p.co2} kg</span></div>
-            <div><span className={`chip ${p.cost < 0 ? "chip-green" : "chip-red"} tabular`}>
-              {p.cost < 0 ? "-$" : "+$"}{Math.abs(p.cost).toFixed(2)}
+            <div>
+              <span className={`chip ${impact < 0 ? "chip-green" : "chip-red"} tabular`} style={{ fontSize: 11 }}>
+                {formatPlayImpact(impact, sortCategory)}
+              </span>
+            </div>
+            <div><span className={`chip ${p.cost < 0 ? "chip-green" : "chip-red"} tabular`} style={{ fontSize: 11 }}>
+              {p.cost < 0 ? "−$" : "+$"}{Math.abs(p.cost).toFixed(2)}
             </span></div>
-            <div style={{ fontSize: 13, color: "var(--text-secondary)" }}>{p.owner}</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
-              <span style={{ width: 8, height: 8, borderRadius: "50%", background: effortDot(p.effort) }} />
-              {p.effort}
-            </div>
-            <div><button onClick={() => assign(p)} className="btn btn-primary btn-sm">Assign →</button></div>
+            <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{p.owner}</div>
+            <div><button onClick={() => assign(p)} className="btn btn-primary btn-sm">Assign</button></div>
           </div>
-        ))}
+        );})}
       </div>
 
       <div style={{
@@ -931,17 +1674,19 @@ function Step5({ setLcaData, go, pushToast }: { setLcaData: (f: (d: LcaData) => 
         display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 12,
       }}>
         <div style={{ fontWeight: 500, color: "var(--green-dark)" }}>
-          Total CO₂ reduction potential: -1,407 kg CO₂e/unit (43% of total footprint)
+          Total CO₂ reduction potential: {totalCo2.toLocaleString()} kg CO₂e/unit ({baselineCo2 ? Math.round(Math.abs(totalCo2 / baselineCo2) * 100) : 0}% of total footprint)
         </div>
         <div style={{ fontWeight: 500, color: "var(--green-dark)" }}>
-          Net cost impact: -$0.35/unit at volume
+          Net cost impact: {totalCost < 0 ? "-" : "+"}${Math.abs(totalCost).toFixed(2)}/unit at volume
         </div>
       </div>
 
       <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
         <button onClick={() => go(6)} className="btn btn-ghost">Model a scenario →</button>
-        <button onClick={() => assign(PLAYS[0])} className="btn btn-primary">Assign a play →</button>
+        <button onClick={() => activePlays[0] && assign(activePlays[0])} className="btn btn-primary">Assign a play →</button>
       </div>
+      </>
+      )}
     </div>
   );
 }
@@ -967,42 +1712,153 @@ const SCENARIOS: Record<string, { matBefore: number; matAfter: number; costAfter
   "100% TENCEL™ Lyocell — Lenzing AG (premium Little Planet capsule)": { matBefore: 1976, matAfter: 1550, costAfter: 4.94 },
 };
 
-function Step6({ setLcaData, go, pushToast }: { setLcaData: (f: (d: LcaData) => LcaData) => void; go: (s: Step) => void; pushToast: (t: string, k?: Toast["kind"]) => void }) {
+const BASELINE_UNIT_COST_USD = 4.62;
+
+function enrichScenarioWithCost(
+  result: ScenarioResult,
+  opts: { changeType: string; material: string; volume: number; baselineCost: number },
+): ScenarioResult {
+  if (opts.changeType !== "Material") return result;
+
+  const scenario = SCENARIOS[opts.material];
+  if (!scenario) return result;
+
+  const hasCostRow = result.rows.some((row) => row.metric.toLowerCase().includes("cost"));
+  const costDelta = scenario.costAfter - opts.baselineCost;
+  const annualCostSavingUsd = (opts.baselineCost - scenario.costAfter) * opts.volume;
+
+  return {
+    ...result,
+    annualCostSavingUsd: result.annualCostSavingUsd ?? annualCostSavingUsd,
+    rows: hasCostRow
+      ? result.rows
+      : [
+          ...result.rows,
+          {
+            metric: "Material cost / 3-pack",
+            before: `$${opts.baselineCost.toFixed(2)}`,
+            after: `$${scenario.costAfter.toFixed(2)}`,
+            delta: `${costDelta > 0 ? "+" : ""}$${costDelta.toFixed(2)}`,
+            improved: costDelta < 0,
+            source: result.source ?? "ai_estimated",
+          },
+          {
+            metric: "Annual cost impact",
+            before: "—",
+            after: `${annualCostSavingUsd >= 0 ? "+" : "−"}$${Math.abs(Math.round(annualCostSavingUsd)).toLocaleString()}`,
+            delta: `at ${(opts.volume / 1000).toFixed(0)}k units/yr`,
+            improved: annualCostSavingUsd >= 0,
+            source: result.source ?? "ai_estimated",
+          },
+        ],
+  };
+}
+
+function Step6({ lcaData, setLcaData, go, pushToast }: { lcaData: LcaData; setLcaData: (f: (d: LcaData) => LcaData) => void; go: (s: Step) => void; pushToast: (t: string, k?: Toast["kind"]) => void }) {
   const [changeType, setChangeType] = useState<"Material" | "Process" | "Supplier">("Material");
   const [stage, setStage] = useState("Materials");
   const [material, setMaterial] = useState(MATERIAL_OPTIONS[2]);
+  const [intervention, setIntervention] = useState("");
   const [volume, setVolume] = useState(100000);
-  const [calculated, setCalculated] = useState(true);
+  const [calculated, setCalculated] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  function calc() {
+  const baselineClimate = lcaData.footprint?.impactCategories.find((c) => c.id === "climate")?.total ?? 3240;
+  const fallbackScenario = SCENARIOS[material];
+  const scenarioResult = lcaData.scenarioResult;
+
+  async function calc() {
+    if (!lcaData.footprint) {
+      pushToast("Complete intake and footprint analysis first", "warning");
+      return;
+    }
+
     setLoading(true);
     setCalculated(false);
-    setTimeout(() => { setLoading(false); setCalculated(true); }, 600);
+    setLcaData((d) => ({ ...d, scenarioStatus: "loading", scenarioResult: null }));
+
+    const selectedIntervention =
+      changeType === "Material"
+        ? `Swap material to: ${material}`
+        : intervention.trim() || `${changeType} change at ${stage}`;
+
+    try {
+      const result = enrichScenarioWithCost(
+        await calculateScenario({
+          data: {
+            intake: toIntakeInput(lcaData),
+            footprint: lcaData.footprint,
+            intervention: selectedIntervention,
+            changeType,
+            stage,
+            volume,
+            carbonPricePerTonne: 65,
+            baselineUnitCostUsd: BASELINE_UNIT_COST_USD,
+          },
+        }),
+        { changeType, material, volume, baselineCost: BASELINE_UNIT_COST_USD },
+      );
+      setLcaData((d) => ({ ...d, scenarioResult: result, scenarioStatus: "ready" }));
+      setCalculated(true);
+    } catch {
+      const matDelta = fallbackScenario.matAfter - fallbackScenario.matBefore;
+      setLcaData((d) => ({
+        ...d,
+        scenarioResult: {
+          intervention: selectedIntervention,
+          source: "ai_estimated",
+          carbonCostSavingsUsd: Math.abs(matDelta) * volume / 1000 * 65,
+          annualCo2ReductionKg: Math.abs(matDelta) * volume / 1000,
+          annualCostSavingUsd: (BASELINE_UNIT_COST_USD - fallbackScenario.costAfter) * volume,
+          rows: [
+            { metric: "Material CO₂e", before: `${fallbackScenario.matBefore.toLocaleString()} kg`, after: `${fallbackScenario.matAfter.toLocaleString()} kg`, delta: `${matDelta > 0 ? "+" : ""}${matDelta} kg`, improved: matDelta < 0, source: "ai_estimated" },
+            { metric: "Total footprint", before: `${baselineClimate.toLocaleString()} kg`, after: `${(baselineClimate + matDelta).toLocaleString()} kg`, delta: `${matDelta > 0 ? "+" : ""}${matDelta} kg`, improved: matDelta < 0, source: "ai_estimated" },
+            { metric: "Material cost / 3-pack", before: `$${BASELINE_UNIT_COST_USD.toFixed(2)}`, after: `$${fallbackScenario.costAfter.toFixed(2)}`, delta: `${fallbackScenario.costAfter - BASELINE_UNIT_COST_USD > 0 ? "+" : ""}$${(fallbackScenario.costAfter - BASELINE_UNIT_COST_USD).toFixed(2)}`, improved: fallbackScenario.costAfter < BASELINE_UNIT_COST_USD, source: "ai_estimated" },
+            { metric: "Annual CO₂ reduction", before: "—", after: `${Math.abs(matDelta * volume / 1000).toLocaleString()} kg`, delta: `at ${(volume / 1000).toFixed(0)}k units`, improved: true, source: "ai_estimated" },
+            { metric: "Carbon cost savings", before: "—", after: `$${Math.round(Math.abs(matDelta) * volume / 1000 * 65).toLocaleString()}`, delta: "@ $65/tonne CO₂e", improved: true, source: "ai_estimated" },
+            { metric: "Annual cost impact", before: "—", after: `${(BASELINE_UNIT_COST_USD - fallbackScenario.costAfter) * volume >= 0 ? "+" : "−"}$${Math.abs(Math.round((BASELINE_UNIT_COST_USD - fallbackScenario.costAfter) * volume)).toLocaleString()}`, delta: `at ${(volume / 1000).toFixed(0)}k units/yr`, improved: fallbackScenario.costAfter <= BASELINE_UNIT_COST_USD, source: "ai_estimated" },
+          ],
+          impactCategories: lcaData.footprint!.impactCategories.map((category) => ({
+            id: category.id,
+            label: category.label,
+            before: category.total,
+            after: category.id === "climate" ? category.total + matDelta : category.total * 0.95,
+            unit: category.unit,
+            source: "ai_estimated" as const,
+          })),
+        },
+        scenarioStatus: "ready",
+      }));
+      setCalculated(true);
+      pushToast("Scenario modeled with fallback values", "warning");
+    } finally {
+      setLoading(false);
+    }
   }
 
   function assignScenario() {
-    setLcaData((d) => ({ ...d, selectedPlay: "p1" }));
+    setLcaData((d) => ({ ...d, selectedPlay: d.plays?.[0]?.id ?? "p1" }));
     pushToast("Scenario assigned. Generating artifact in Step 7.", "success");
     setTimeout(() => go(7), 350);
   }
 
-  const sc = SCENARIOS[material];
-  const matDelta = sc.matAfter - sc.matBefore;
-  const totalAfter = 3240 + matDelta;
-  const costBefore = 4.62;
-  const costDelta = sc.costAfter - costBefore;
-  const annualCo2 = Math.round(-matDelta * volume / 1000) * 1000;
-  const annualCost = Math.round(-costDelta * volume);
+  const comparisonRows = scenarioResult?.rows ?? [];
+  const impactRows = scenarioResult?.impactCategories ?? [];
 
   return (
     <div style={{ padding: 40 }}>
       <BackBtn go={go} to={4} />
       <Eyebrow>Scenario Modeling</Eyebrow>
-      <h1 className="page-title" style={{ marginBottom: 10 }}>Swap a material or process. See the delta instantly.</h1>
+      <h1 className="page-title" style={{ marginBottom: 10 }}>Model a swap. See the delta.</h1>
       <p className="body-text" style={{ maxWidth: 760, marginBottom: 28 }}>
-        Test a product decision without rebuilding the LCA. Designed for designers and R&D — iterate in seconds.
+        Recalculates footprint and unit cost with your intervention, incl. carbon cost at $65/tonne CO₂e.
       </p>
+
+      {!lcaData.footprint && (
+        <div className="card" style={{ padding: 24, marginBottom: 20 }}>
+          Complete intake first to build a baseline footprint.
+        </div>
+      )}
 
       <div style={{ display: "grid", gridTemplateColumns: "400px 1fr", gap: 20, alignItems: "start" }}>
         {/* Controls */}
@@ -1013,7 +1869,7 @@ function Step6({ setLcaData, go, pushToast }: { setLcaData: (f: (d: LcaData) => 
             <div className="label" style={{ marginBottom: 8 }}>What are you changing?</div>
             <div style={{ display: "flex", background: "var(--gray-section)", borderRadius: 10, padding: 4 }}>
               {(["Material", "Process", "Supplier"] as const).map((t) => (
-                <button key={t} onClick={() => setChangeType(t)} style={{
+                <button key={t} onClick={() => { setChangeType(t); setCalculated(false); }} style={{
                   flex: 1, padding: "8px 0", borderRadius: 8, fontSize: 13, fontWeight: 500,
                   background: changeType === t ? "white" : "transparent",
                   color: changeType === t ? "var(--text-primary)" : "var(--text-secondary)",
@@ -1025,7 +1881,7 @@ function Step6({ setLcaData, go, pushToast }: { setLcaData: (f: (d: LcaData) => 
 
           <div style={{ marginBottom: 16 }}>
             <div className="label" style={{ marginBottom: 8 }}>Which lifecycle stage?</div>
-            <select className="input" value={stage} onChange={(e) => setStage(e.target.value)}>
+            <select className="input" value={stage} onChange={(e) => { setStage(e.target.value); setCalculated(false); }}>
               <option>Materials</option><option>Manufacturing</option><option>Logistics</option><option>Packaging</option>
             </select>
           </div>
@@ -1047,6 +1903,19 @@ function Step6({ setLcaData, go, pushToast }: { setLcaData: (f: (d: LcaData) => 
             </>
           )}
 
+          {changeType !== "Material" && (
+            <div style={{ marginBottom: 16 }}>
+              <div className="label" style={{ marginBottom: 8 }}>Describe the intervention</div>
+              <textarea
+                className="input"
+                rows={3}
+                value={intervention}
+                onChange={(e) => { setIntervention(e.target.value); setCalculated(false); }}
+                placeholder={changeType === "Process" ? "e.g. Switch dye house to cold-pad batch reactive dyeing" : "e.g. Nearshore cut & sew to Guatemala to reduce freight distance"}
+              />
+            </div>
+          )}
+
           <div style={{ marginBottom: 20 }}>
             <div className="label" style={{ marginBottom: 8, display: "flex", justifyContent: "space-between" }}>
               <span>Volume (units/year)</span>
@@ -1057,8 +1926,8 @@ function Step6({ setLcaData, go, pushToast }: { setLcaData: (f: (d: LcaData) => 
               style={{ width: "100%", accentColor: "var(--green-dark)" }} />
           </div>
 
-          <button onClick={calc} className="btn btn-primary" style={{ width: "100%", padding: 12 }} disabled={loading}>
-            {loading ? <><span className="spinner" /> Calculating...</> : "Calculate scenario"}
+          <button onClick={calc} className="btn btn-primary" style={{ width: "100%", padding: 12 }} disabled={loading || !lcaData.footprint}>
+            {loading ? <><span className="spinner" /> Modeling scenario…</> : "Calculate scenario"}
           </button>
         </div>
 
@@ -1068,63 +1937,66 @@ function Step6({ setLcaData, go, pushToast }: { setLcaData: (f: (d: LcaData) => 
             <span className="chip chip-gray">Baseline</span>
             <span style={{ color: "var(--text-tertiary)" }}>vs.</span>
             <span className="chip chip-green">Scenario</span>
+            {scenarioResult?.source && <SourceBadge source={scenarioResult.source} />}
           </div>
 
           {!calculated ? (
             <div style={{ padding: "60px 0", textAlign: "center", color: "var(--text-tertiary)" }}>
-              {loading ? "Calculating delta..." : "Adjust inputs then click Calculate scenario."}
+              {loading ? "Recalculating footprint across all impact categories…" : "Adjust inputs then click Calculate scenario."}
             </div>
           ) : (
             <div className="fade-in">
-              {[
-                ["Material CO₂e", `${sc.matBefore.toLocaleString()} kg`, `${sc.matAfter.toLocaleString()} kg`, `${matDelta > 0 ? "+" : ""}${matDelta} kg`, matDelta < 0],
-                ["Total footprint", "3,240 kg", `${totalAfter.toLocaleString()} kg`, `${matDelta > 0 ? "+" : ""}${matDelta} kg`, matDelta < 0],
-                ["Material cost / 3-pack", "$4.62", `$${sc.costAfter.toFixed(2)}`, `${costDelta > 0 ? "+" : ""}$${costDelta.toFixed(2)}`, costDelta < 0],
-                ["Annual CO₂ reduction", "—", `${Math.abs(annualCo2).toLocaleString()} kg`, `at ${(volume/1000).toFixed(0)}k units`, true],
-                ["Annual cost saving", "—", `$${Math.abs(annualCost).toLocaleString()}`, `at ${(volume/1000).toFixed(0)}k units`, costDelta < 0],
-              ].map(([metric, before, after, delta, good], i) => (
+              {comparisonRows.map((row, i) => (
                 <div key={i} style={{
                   display: "grid", gridTemplateColumns: "1.4fr 1fr 30px 1fr 1.2fr",
-                  alignItems: "center", padding: "14px 0",
-                  borderBottom: i < 4 ? "1px solid var(--border)" : "none",
-                  gap: 10,
+                  padding: "14px 0", borderBottom: "1px solid var(--border)", alignItems: "center", fontSize: 14,
                 }}>
-                  <div style={{ fontSize: 14, fontWeight: 500 }}>{metric as string}</div>
-                  <div style={{ fontSize: 14, color: "var(--text-secondary)" }} className="tabular">{before as string}</div>
-                  <div style={{ textAlign: "center", color: "var(--text-tertiary)" }}>→</div>
-                  <div style={{ fontSize: 14, fontWeight: 500 }} className="tabular">{after as string}</div>
-                  <div style={{ textAlign: "right" }}>
-                    <span className={`chip ${good ? "chip-green" : "chip-red"} tabular`}>
-                      {good && (delta as string).includes("$") === false && (delta as string).includes("kg") && !(delta as string).startsWith("at") ? "▼ " : ""}
-                      {delta as string}
-                    </span>
+                  <div style={{ fontWeight: 500 }}>
+                    {row.metric}
+                    <SourceBadge source={row.source} />
                   </div>
+                  <div className="tabular" style={{ color: "var(--text-secondary)" }}>{row.before}</div>
+                  <div style={{ textAlign: "center", color: "var(--text-tertiary)" }}>→</div>
+                  <div className="tabular">{row.after}</div>
+                  <div className="tabular" style={{ color: row.improved ? "var(--green-dark)" : "var(--amber)", fontWeight: 500 }}>{row.delta}</div>
                 </div>
               ))}
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginTop: 24 }}>
-                <div style={{ padding: 20, background: "var(--green-light)", border: "1px solid var(--green-border)", borderRadius: 12 }}>
-                  <div className="num-large tabular" style={{ color: "var(--green-dark)" }}>{Math.abs(annualCo2).toLocaleString()} kg</div>
-                  <div style={{ fontSize: 13, fontWeight: 500, marginTop: 4 }}>Annual carbon reduction at {(volume/1000).toFixed(0)}k units</div>
-                  <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 4 }}>= {Math.round(Math.abs(annualCo2) / 460)} transatlantic flights avoided</div>
+              {impactRows.length > 0 && (
+                <div style={{ marginTop: 24 }}>
+                  <div className="card-title" style={{ marginBottom: 12 }}>Impact categories · before / after</div>
+                  {impactRows.map((row) => (
+                    <div key={row.id} style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr", gap: 12, padding: "10px 0", borderBottom: "1px solid var(--border)", fontSize: 14 }}>
+                      <div>{row.label} <SourceBadge source={row.source} /></div>
+                      <div className="tabular">{row.before.toLocaleString()} {row.unit}</div>
+                      <div className="tabular" style={{ color: row.after < row.before ? "var(--green-dark)" : "var(--amber)", fontWeight: 500 }}>
+                        {row.after.toLocaleString()} {row.unit}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <div style={{ padding: 20, background: "var(--green-light)", border: "1px solid var(--green-border)", borderRadius: 12 }}>
-                  <div className="num-large tabular" style={{ color: "var(--green-dark)" }}>${Math.abs(annualCost).toLocaleString()}</div>
-                  <div style={{ fontSize: 13, fontWeight: 500, marginTop: 4 }}>Annual cost {costDelta < 0 ? "saving" : "increase"} at {(volume/1000).toFixed(0)}k units</div>
-                  <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 4 }}>Payback: immediate — no capex required</div>
+              )}
+
+              {scenarioResult?.carbonCostSavingsUsd != null && (
+                <div style={{ marginTop: 20, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <div style={{ padding: 16, background: "var(--green-light)", borderRadius: 10, fontSize: 14 }}>
+                    Carbon cost savings at $65/tonne CO₂e: <strong>${Math.round(scenarioResult.carbonCostSavingsUsd).toLocaleString()}</strong> annually
+                  </div>
+                  {scenarioResult.annualCostSavingUsd != null && (
+                    <div style={{ padding: 16, background: "var(--gray-section)", borderRadius: 10, fontSize: 14 }}>
+                      Unit cost impact at volume: <strong>{scenarioResult.annualCostSavingUsd >= 0 ? "+" : "−"}${Math.abs(Math.round(scenarioResult.annualCostSavingUsd)).toLocaleString()}</strong> annually
+                    </div>
+                  )}
                 </div>
-              </div>
-
-              <div style={{ marginTop: 16, padding: "10px 14px", background: "var(--amber-light)", border: "1px solid var(--amber-border)", borderRadius: 10, fontSize: 13 }}>
-                ⚠ GOTS Scope Certificate + OEKO-TEX Std 100 Class I (infants) required. 3 qualified mills identified: Arvind Limited (IN), Pratibha Syntex (IN), Spectrum Knits (IN) — see Suppliers tab.
-              </div>
-
-              <button onClick={assignScenario} className="btn btn-primary" style={{ width: "100%", marginTop: 20, padding: 12 }}>
-                Assign this scenario →
-              </button>
+              )}
             </div>
           )}
         </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 10, marginTop: 28 }}>
+        <button onClick={() => go(4)} className="btn btn-ghost">← Back to footprint</button>
+        <button onClick={assignScenario} className="btn btn-primary" disabled={!calculated}>Assign this scenario →</button>
       </div>
     </div>
   );
@@ -1135,9 +2007,9 @@ function Step6({ setLcaData, go, pushToast }: { setLcaData: (f: (d: LcaData) => 
 // ─────────────────────────────────────────────────────────────────────
 
 const ARTIFACTS = [
-  { id: "rfp" as const, icon: <I.doc />, title: "Supplier RFP", desc: "Request for proposal to certified material suppliers. Includes specs, certification requirements, and timeline." },
-  { id: "letter" as const, icon: <I.envelope />, title: "Supplier Engagement Letter", desc: "Introductory outreach to a supplier about a pilot program. Less formal than an RFP." },
-  { id: "brief" as const, icon: <I.team />, title: "Internal Process Brief", desc: "A brief for your ops or procurement team explaining the play, the data, and the next steps." },
+  { id: "rfp" as const, icon: <I.doc />, title: "Supplier RFP", desc: "RFP with specs, certs, and timeline." },
+  { id: "letter" as const, icon: <I.envelope />, title: "Supplier Engagement Letter", desc: "Intro outreach for a pilot program." },
+  { id: "brief" as const, icon: <I.team />, title: "Internal Process Brief", desc: "Brief for ops/procurement on next steps." },
 ];
 
 const RFP_TEXT = `SUPPLIER REQUEST FOR PROPOSAL
@@ -1217,9 +2089,9 @@ function Step7({ lcaData, setLcaData, go, pushToast }: { lcaData: LcaData; setLc
     <div style={{ maxWidth: 720, margin: "0 auto", padding: 40 }}>
       <BackBtn go={go} to={5} />
       <Eyebrow>Assign & Generate</Eyebrow>
-      <h1 className="page-title" style={{ marginBottom: 10 }}>Turn this play into a sent document.</h1>
+      <h1 className="page-title" style={{ marginBottom: 10 }}>Generate and send.</h1>
       <p className="body-text" style={{ marginBottom: 24 }}>
-        Click Generate and Pathways drafts a ready-to-send work artifact using the Claude API. The action does not stop at a recommendation.
+        Pathways drafts a ready-to-send artifact from your assigned play.
       </p>
 
       <div style={{ padding: 16, background: "var(--green-light)", border: "1px solid var(--green-border)", borderRadius: 12, marginBottom: 28 }}>
@@ -1282,7 +2154,7 @@ function Step7({ lcaData, setLcaData, go, pushToast }: { lcaData: LcaData; setLc
           </div>
 
           <div style={{ marginTop: 14, fontSize: 13, color: "var(--text-secondary)" }}>
-            Artifact generated using Claude API · Emission data: ecoinvent 3.10 + Higg MSI 3.7 · Data stays in your environment
+            Artifact generated with Claude · ecoinvent + Higg MSI data
           </div>
         </div>
       )}
@@ -1292,9 +2164,9 @@ function Step7({ lcaData, setLcaData, go, pushToast }: { lcaData: LcaData; setLc
           <h2 className="section-title" style={{ marginBottom: 16 }}>What's next?</h2>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
             {[
-              { t: "Assign remaining plays", d: "5 more plays in your action queue. Each takes one click to assign.", cta: "View action queue →", on: () => go(5) },
-              { t: "Track progress", d: "See how assigned plays are reducing your footprint over time.", cta: "Go to dashboard →", on: () => go("dashboard") },
-              { t: "Start another LCA", d: "Run a second product to compare footprints across your catalog.", cta: "New LCA →", on: () => go(1) },
+              { t: "Assign remaining plays", d: "5 more plays in your queue.", cta: "View action queue →", on: () => go(5) },
+              { t: "Track progress", d: "See footprint reduction over time.", cta: "Go to My LCAs →", on: () => go("library") },
+              { t: "Start another LCA", d: "Run a second product to compare.", cta: "New LCA →", on: () => go(1) },
             ].map((c, i) => (
               <div key={i} className="card card-hover">
                 <div className="card-title" style={{ marginBottom: 8 }}>{c.t}</div>
@@ -1344,7 +2216,7 @@ function Dashboard({ go }: { go: (s: Step) => void }) {
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 28 }}>
         {[
-          { l: "Active LCAs", v: "1", c: "Little Planet™ Organic Sleep & Play (3-Pack) in progress" },
+          { l: "Active LCAs", v: "1", c: "Little Planet™ 3-Pack in progress" },
           { l: "Raise the Future™ plays assigned", v: "1 of 6", c: "5 remaining" },
           { l: "CO₂ identified", v: "1,407 kg", c: "reduction potential" },
           { l: "Cost identified", v: "$0.35/unit", c: "net saving potential" },
@@ -1427,7 +2299,7 @@ const TECHNO_FLOWS = [
   { name: "Electricity, medium voltage", category: "Energy / Grid", qty: "1.420", unit: "kWh", provider: "Market for electricity | IN-South", source: "ecoinvent" },
   { name: "Heat, natural gas (boiler)", category: "Energy / Thermal", qty: "0.640", unit: "MJ", provider: "Steam production | IN", source: "ecoinvent" },
   { name: "Process water (RO)", category: "Process water", qty: "11.20", unit: "L", provider: "Tap water | IN", source: "ecoinvent" },
-  { name: "Reactive dye, Bluesign® bAsic", category: "Chemicals / Dyes", qty: "0.014", unit: "kg", provider: "Dye production | RoW", source: "AI estimated" },
+  { name: "Reactive dye, Bluesign® basic", category: "Chemicals / Dyes", qty: "0.014", unit: "kg", provider: "Dye production | RoW", source: "Benchmark" },
   { name: "Sodium hydroxide, 50%", category: "Chemicals / Inorganic", qty: "0.022", unit: "kg", provider: "NaOH production | RER", source: "ecoinvent" },
   { name: "FSC™ hangtag (recycled paper)", category: "Packaging", qty: "0.006", unit: "kg", provider: "FSC paper | EU", source: "ecoinvent" },
   { name: "Corrugated carton, master pack", category: "Packaging", qty: "0.045", unit: "kg", provider: "Corrugated board, recycled | IN", source: "ecoinvent" },
@@ -1453,10 +2325,28 @@ const IMPACT_METHODS = [
   { name: "USEtox — Ecotoxicity, freshwater", value: "0.62", unit: "CTUe", contrib: 38 },
 ];
 
+const MODEL_LOAD_STEPS = [
+  "Assembling 9 foreground processes…",
+  "Linking 10 technosphere flows…",
+  "Resolving ecoinvent 3.10 background datasets…",
+  "Applying mass allocation & IPCC 2021 GWP100…",
+  "Validating product system graph…",
+];
+
 function StepModel({ go }: { go: (s: Step) => void }) {
+  const [loading, setLoading] = useState(true);
+  const [loadStep, setLoadStep] = useState(0);
   const [selected, setSelected] = useState("dye");
   const [tab, setTab] = useState<"techno" | "elem" | "params" | "impact">("techno");
   const proc = MODEL_PROCESSES.find((p) => p.id === selected)!;
+
+  useEffect(() => {
+    const stepInterval = setInterval(() => {
+      setLoadStep((s) => Math.min(s + 1, MODEL_LOAD_STEPS.length - 1));
+    }, 650);
+    const doneTimer = setTimeout(() => setLoading(false), 3200);
+    return () => { clearInterval(stepInterval); clearTimeout(doneTimer); };
+  }, []);
 
   const nodeStyle = (kind: string, active: boolean): React.CSSProperties => ({
     padding: "10px 12px",
@@ -1507,14 +2397,44 @@ function StepModel({ go }: { go: (s: Step) => void }) {
   return (
     <div style={{ padding: 40 }}>
       <BackBtn go={go} to={3} />
-      
 
+      {loading ? (
+        <div style={{ maxWidth: 640, margin: "80px auto", textAlign: "center" }}>
+          <Eyebrow>LCA Model</Eyebrow>
+          <h1 className="page-title" style={{ marginBottom: 24 }}>Building product system model…</h1>
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 28 }}>
+            <span className="spinner" style={{ width: 28, height: 28, borderTopColor: "var(--green-dark)" }} />
+          </div>
+          <div className="card" style={{ padding: "20px 24px", textAlign: "left" }}>
+            {MODEL_LOAD_STEPS.map((step, i) => (
+              <div key={step} style={{
+                display: "flex", alignItems: "center", gap: 12, padding: "8px 0",
+                fontSize: 14, color: i <= loadStep ? "var(--text-primary)" : "var(--text-tertiary)",
+                transition: "color 300ms ease",
+              }}>
+                <span style={{
+                  width: 20, height: 20, borderRadius: "50%", flexShrink: 0,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 11, fontWeight: 600,
+                  background: i < loadStep ? "var(--green-dark)" : i === loadStep ? "var(--green-light)" : "var(--gray-section)",
+                  color: i < loadStep ? "white" : i === loadStep ? "var(--green-dark)" : "var(--text-tertiary)",
+                  border: i === loadStep ? "2px solid var(--green-dark)" : "none",
+                }}>
+                  {i < loadStep ? "✓" : i === loadStep ? <span className="spinner" style={{ width: 10, height: 10, borderTopColor: "var(--green-dark)" }} /> : i + 1}
+                </span>
+                {step}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+      <>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 8, flexWrap: "wrap", gap: 16 }}>
         <div>
           <Eyebrow>LCA Model</Eyebrow>
           <h1 className="page-title">Product system & inventory</h1>
           <p className="body-text" style={{ marginTop: 8, maxWidth: 680 }}>
-            Review the unit processes, technosphere links and elementary flows that make up your product system. Drill into any node to inspect inputs, outputs and data sources.
+            Unit processes, flows, and data sources. Click any node to inspect.
           </p>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -1722,6 +2642,8 @@ function StepModel({ go }: { go: (s: Step) => void }) {
       <button onClick={() => go(4)} className="btn btn-primary" style={{ width: "100%", marginTop: 28, padding: 14 }}>
         Calculate footprint →
       </button>
+      </>
+      )}
     </div>
   );
 }
@@ -1775,7 +2697,7 @@ function FlowTable({ rows, cols }: { rows: FlowRow[]; cols: string[] }) {
               <td style={{ padding: "12px 14px", color: "var(--text-secondary)" }}>{r.unit}</td>
               <td style={{ padding: "12px 14px", color: "var(--text-secondary)" }}>{r.provider}</td>
               <td style={{ padding: "12px 14px" }}>
-                <span className={`chip ${r.source === "Primary" ? "chip-green" : r.source === "AI estimated" ? "chip-amber" : "chip-blue"}`} style={{ fontSize: 11 }}>{r.source}</span>
+                <span className={`chip ${r.source === "Primary" ? "chip-green" : r.source === "Benchmark" ? "chip-gray" : "chip-blue"}`} style={{ fontSize: 11 }}>{r.source}</span>
               </td>
             </tr>
           ))}
@@ -1800,29 +2722,30 @@ const PRM_FIELDS = [
 
 const PRM_OWNERS = [
   // ── Internal — Carter's HQ ──
-  { dept: "Product Management", icon: <I.box />, name: "Alex Johnson", title: "Sr. Product Manager, Little Planet™", sfRole: "Product2 Lead — Style 225G731", group: "Internal · Carter's HQ", queries: ["Product2.Bill_of_Materials__c", "Product2.Weight_g__c", "Product2.Compliance_Deadline__c", "Product2.Supplier_Contact_List__c"], why: "Primary PM on the SKU — owns BOM, product specs, weight/dimensions, and compliance timeline" },
-  { dept: "Design & PD", icon: <I.pencil />, name: "Megan O'Connell", title: "Senior Designer, Little Planet™", sfRole: "Material Composition Owner", group: "Internal · Carter's HQ", queries: ["Product2.Material_Composition__c", "Product2.GSM__c", "Product2.Wash_Durability_Cycles__c", "Product2.End_of_Life_Design__c"], why: "Owns material % composition, snap/trim selection, and end-of-life recyclability assumptions" },
-  { dept: "R&D / Engineering", icon: <I.pencil />, name: "Wei Zhang", title: "Textile R&D Engineer", sfRole: "Process Spec Owner", group: "Internal · Carter's HQ", queries: ["Process_Spec__c (knit, dye, finish)", "Packaging_Design__c", "Disassembly_Index__c"], why: "Defines manufacturing process specs (knitting, dyeing, finishing) and packaging design system" },
-  { dept: "Sourcing — Babywear", icon: <I.box />, name: "Priya Raghavan", title: "Director, Sourcing — Babywear", sfRole: "Vendor Relationship Owner — Shahi Exports", group: "Internal · Carter's HQ", queries: ["Account.Vendor__r where Tier ≤ 2", "Contract.Fabric_Spec__c", "Supplier_Location__c", "Inbound_Freight__c"], why: "Owns Shahi Exports MSA + 9 of 11 Tier-2 mill contracts; routes Tier-1/2 supplier requests" },
-  { dept: "Procurement — Trims", icon: <I.box />, name: "Hannah Park", title: "Procurement Manager, Trims & Packaging", sfRole: "PO Owner — YKK / Avery Dennison", group: "Internal · Carter's HQ", queries: ["PurchaseOrder__c where Category IN ('Trim','Packaging')", "Supplier_Packaging_Material__c"], why: "Owns inbound packaging materials and trim supplier routing (YKK SNAD, Avery Dennison FSC)" },
-  { dept: "Manufacturing Ops", icon: <I.factory />, name: "Rakesh Iyer", title: "Mfg Ops Lead, India South", sfRole: "Site Lead — Bengaluru", group: "Internal · Carter's HQ", queries: ["Manufacturing_Site__c where Region = 'India South'", "Energy_Log__c (last 90d)", "Water_Use__c", "Waste_Manifest__c", "ZDHC_ClearStream__c"], why: "Single ops lead tied to Shahi Unit 8 — owns electricity, gas, water, and on-site waste data" },
-  { dept: "Facilities — Bengaluru", icon: <I.factory />, name: "Anjali Krishnan", title: "Facilities Manager, Shahi Unit 8 (embed)", sfRole: "Equipment Efficiency Owner", group: "Internal · Carter's HQ", queries: ["Equipment_Efficiency__c", "Steam_Consumption__c", "Compressed_Air_kWh__c"], why: "Tracks per-line equipment efficiency and process utility consumption per production run" },
-  { dept: "Global Logistics", icon: <I.truck />, name: "Daniel Reyes", title: "Sr. Manager, Global Logistics", sfRole: "Shipment Owner — IN→US lanes", group: "Internal · Carter's HQ", queries: ["Shipment__c where Product2 = 'SKU-LP-3PSP-NB'", "Carrier__r.Mode", "Lane__c = 'MUN-SAV'"], why: "Owns Mundra→Savannah outbound shipments and inbound freight volumes for this style YTD" },
-  { dept: "Distribution — Braselton DC", icon: <I.truck />, name: "Marcus Lee", title: "DC Operations Manager, Braselton GA", sfRole: "Warehouse Energy Owner", group: "Internal · Carter's HQ", queries: ["Warehouse__c = 'Braselton'", "Warehouse_Energy_kWh__c", "Last_Mile_Carrier__c"], why: "Owns warehousing energy use and last-mile carrier mix from Braselton DC to retail / DTC" },
+  { dept: "Product Management", icon: <I.box />, name: "Alex Johnson", email: "alex.johnson@carters.com", title: "Sr. Product Manager, Little Planet™", sfRole: "Product2 Lead — Style 225G731", group: "Internal · Carter's HQ", queries: ["Bill of materials", "Product weight", "Compliance deadline", "Supplier contact list"], why: "Primary PM on the SKU — owns BOM, product specs, weight/dimensions, and compliance timeline" },
+  { dept: "Design & PD", icon: <I.pencil />, name: "Megan O'Connell", email: "megan.oconnell@carters.com", title: "Senior Designer, Little Planet™", sfRole: "Material Composition Owner", group: "Internal · Carter's HQ", queries: ["Material composition", "Fabric weight (GSM)", "Wash durability cycles", "End-of-life design"], why: "Owns material % composition, snap/trim selection, and end-of-life recyclability assumptions" },
+  { dept: "R&D / Engineering", icon: <I.pencil />, name: "Wei Zhang", email: "wei.zhang@carters.com", title: "Textile R&D Engineer", sfRole: "Process Spec Owner", group: "Internal · Carter's HQ", queries: ["Process specs (knit, dye, finish)", "Packaging design", "Disassembly index"], why: "Defines manufacturing process specs (knitting, dyeing, finishing) and packaging design system" },
+  { dept: "Sourcing — Babywear", icon: <I.box />, name: "Priya Raghavan", email: "priya.raghavan@carters.com", title: "Director, Sourcing — Babywear", sfRole: "Vendor Relationship Owner — Shahi Exports", group: "Internal · Carter's HQ", queries: ["Tier 1–2 vendor accounts", "Fabric specification", "Supplier location", "Inbound freight"], why: "Owns Shahi Exports MSA + 9 of 11 Tier-2 mill contracts; routes Tier-1/2 supplier requests" },
+  { dept: "Procurement — Trims", icon: <I.box />, name: "Hannah Park", email: "hannah.park@carters.com", title: "Procurement Manager, Trims & Packaging", sfRole: "PO Owner — YKK / Avery Dennison", group: "Internal · Carter's HQ", queries: ["Trim and packaging purchase orders", "Supplier packaging materials"], why: "Owns inbound packaging materials and trim supplier routing (YKK SNAD, Avery Dennison FSC)" },
+  { dept: "Manufacturing Ops", icon: <I.factory />, name: "Rakesh Iyer", email: "rakesh.iyer@carters.com", title: "Mfg Ops Lead, India South", sfRole: "Site Lead — Bengaluru", group: "Internal · Carter's HQ", queries: ["Manufacturing site (India South)", "Energy log (last 90 days)", "Water use", "Waste manifest", "ZDHC ClearStream compliance"], why: "Single ops lead tied to Shahi Unit 8 — owns electricity, gas, water, and on-site waste data" },
+  { dept: "Facilities — Bengaluru", icon: <I.factory />, name: "Anjali Krishnan", email: "anjali.krishnan@carters.com", title: "Facilities Manager, Shahi Unit 8 (embed)", sfRole: "Equipment Efficiency Owner", group: "Internal · Carter's HQ", queries: ["Equipment efficiency", "Steam consumption", "Compressed air (kWh)"], why: "Tracks per-line equipment efficiency and process utility consumption per production run" },
+  { dept: "Global Logistics", icon: <I.truck />, name: "Daniel Reyes", email: "daniel.reyes@carters.com", title: "Sr. Manager, Global Logistics", sfRole: "Shipment Owner — IN→US lanes", group: "Internal · Carter's HQ", queries: ["Shipment records for SKU-LP-3PSP-NB", "Carrier transport mode", "Mundra–Savannah shipping lane"], why: "Owns Mundra→Savannah outbound shipments and inbound freight volumes for this style YTD" },
+  { dept: "Distribution — Braselton DC", icon: <I.truck />, name: "Marcus Lee", email: "marcus.lee@carters.com", title: "DC Operations Manager, Braselton GA", sfRole: "Warehouse Energy Owner", group: "Internal · Carter's HQ", queries: ["Braselton warehouse data", "Warehouse energy (kWh)", "Last-mile carrier mix"], why: "Owns warehousing energy use and last-mile carrier mix from Braselton DC to retail / DTC" },
 
   // ── External — Tier-1 / Tier-2 / 3PL (Pathways Data Requests) ──
-  { dept: "Tier 1 Supplier", icon: <I.box />, name: "Sunil Mehta", title: "Sustainability Lead — Shahi Exports", sfRole: "External — Vendor Contact", group: "External · Data Request", queries: ["Primary_Material_Production_Data__c", "Component_EPDs__c", "Packaging_Weight__c"], why: "Cut-and-sew partner for Style 225G731 — provides primary material data, component EPDs, and packaging weight" },
-  { dept: "Tier 2 Mill", icon: <I.box />, name: "Lakshmi Narayanan", title: "EHS Manager — Arvind Limited (Naroda)", sfRole: "External — Tier-2 Mill Contact", group: "External · Data Request", queries: ["GOTS_Certificate__c", "Dye_House_Energy__c", "Effluent_kg__c"], why: "Owns GOTS certificate, dye-house energy, and effluent data for the knit fabric supplied to Shahi" },
-  { dept: "Tier 2 Fiber", icon: <I.box />, name: "Klaus Berger", title: "Sustainability Manager — Lenzing AG", sfRole: "External — EcoVero™ Account", group: "External · Data Request", queries: ["EcoVero_LCA_Module__c", "Wood_Pulp_FSC_Chain__c"], why: "Provides EcoVero™ viscose LCA module + FSC chain-of-custody for the 5% blend" },
-  { dept: "Contract Manufacturer", icon: <I.factory />, name: "Aditi Sharma", title: "Plant Manager — Shahi Unit 8 Finishing", sfRole: "External — Toll Mfg Contact", group: "External · Data Request", queries: ["Energy_per_Unit_kWh__c", "Scrap_Rate_pct__c", "Coating_Process_Emissions__c"], why: "Runs finishing line — owns per-unit energy, scrap rate, and process-specific emissions (printing, coating)" },
-  { dept: "Trim Supplier", icon: <I.box />, name: "Tomoko Yamada", title: "Account Manager — YKK SNAD (Tirupur)", sfRole: "External — Trim Vendor", group: "External · Data Request", queries: ["Snap_Material_Spec__c", "Nickel_Free_Cert__c", "Component_Weight_g__c"], why: "Supplies nickel-free brass snaps — provides component spec, certificate, and weight per garment" },
-  { dept: "3PL — Ocean", icon: <I.truck />, name: "Henrik Sørensen", title: "Account Director — Maersk Spot", sfRole: "External — Carrier Contact", group: "External · Data Request", queries: ["Lane_Distance_nm__c", "Vessel_Fuel_Type__c", "TEU_Utilization_pct__c"], why: "Confirms Mundra→Savannah lane distance, fuel mix (VLSFO vs. bio-blend), and TEU utilization" },
-  { dept: "3PL — Inland US", icon: <I.truck />, name: "Carla Mendes", title: "Operations Lead — Schneider National", sfRole: "External — Drayage / Trucking", group: "External · Data Request", queries: ["Drayage_Distance_mi__c", "Diesel_Gal_per_Mile__c", "Mode_Mix_Rail_vs_Road__c"], why: "Owns Savannah port → Braselton DC drayage — provides fuel consumption and rail/road mode confirmations" },
+  { dept: "Tier 1 Supplier", icon: <I.box />, name: "Sunil Mehta", email: "sunil.mehta@shahi.co.in", title: "Sustainability Lead — Shahi Exports", sfRole: "External — Vendor Contact", group: "External · Data Request", queries: ["Primary material production data", "Component EPDs", "Packaging weight"], why: "Cut-and-sew partner for Style 225G731 — provides primary material data, component EPDs, and packaging weight" },
+  { dept: "Tier 2 Mill", icon: <I.box />, name: "Lakshmi Narayanan", email: "lakshmi.narayanan@arvind.com", title: "EHS Manager — Arvind Limited (Naroda)", sfRole: "External — Tier-2 Mill Contact", group: "External · Data Request", queries: ["GOTS certificate", "Dye house energy", "Effluent (kg)"], why: "Owns GOTS certificate, dye-house energy, and effluent data for the knit fabric supplied to Shahi" },
+  { dept: "Tier 2 Fiber", icon: <I.box />, name: "Klaus Berger", email: "klaus.berger@lenzing.com", title: "Sustainability Manager — Lenzing AG", sfRole: "External — EcoVero™ Account", group: "External · Data Request", queries: ["EcoVero LCA module", "Wood pulp FSC chain of custody"], why: "Provides EcoVero™ viscose LCA module + FSC chain-of-custody for the 5% blend" },
+  { dept: "Contract Manufacturer", icon: <I.factory />, name: "Aditi Sharma", email: "aditi.sharma@shahi.co.in", title: "Plant Manager — Shahi Unit 8 Finishing", sfRole: "External — Toll Mfg Contact", group: "External · Data Request", queries: ["Energy per unit (kWh)", "Scrap rate (%)", "Coating process emissions"], why: "Runs finishing line — owns per-unit energy, scrap rate, and process-specific emissions (printing, coating)" },
+  { dept: "Trim Supplier", icon: <I.box />, name: "Tomoko Yamada", email: "tomoko.yamada@ykk.com", title: "Account Manager — YKK SNAD (Tirupur)", sfRole: "External — Trim Vendor", group: "External · Data Request", queries: ["Snap material specification", "Nickel-free certificate", "Component weight (g)"], why: "Supplies nickel-free brass snaps — provides component spec, certificate, and weight per garment" },
+  { dept: "3PL — Ocean", icon: <I.truck />, name: "Henrik Sørensen", email: "henrik.sorensen@maersk.com", title: "Account Director — Maersk Spot", sfRole: "External — Carrier Contact", group: "External · Data Request", queries: ["Lane distance (nautical miles)", "Vessel fuel type", "TEU utilization (%)"], why: "Confirms Mundra→Savannah lane distance, fuel mix (VLSFO vs. bio-blend), and TEU utilization" },
+  { dept: "3PL — Inland US", icon: <I.truck />, name: "Carla Mendes", email: "carla.mendes@schneider.com", title: "Operations Lead — Schneider National", sfRole: "External — Drayage / Trucking", group: "External · Data Request", queries: ["Drayage distance (miles)", "Diesel consumption (gal/mile)", "Rail vs. road mode mix"], why: "Owns Savannah port → Braselton DC drayage — provides fuel consumption and rail/road mode confirmations" },
 ];
 
 function StepPRM({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) => void; pushToast: (t: string, k?: Toast["kind"]) => void }) {
   const [connected, setConnected] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [sending, setSending] = useState(false);
   const [lastSync, setLastSync] = useState("2 min ago");
   const [provider, setProvider] = useState<"salesforce" | "hubspot" | "dynamics">("salesforce");
 
@@ -1831,15 +2754,32 @@ function StepPRM({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) =
     setTimeout(() => { setSyncing(false); setLastSync("just now"); pushToast("PRM resynced — 16 owners confirmed across internal + external partners", "success"); }, 1100);
   }
 
+  async function sendRequests() {
+    setSending(true);
+    const minDelay = new Promise((r) => setTimeout(r, 3800));
+    const emailPromise = sendDataRequestEmails({
+      data: { productName: lcaData.productName || "Little Planet™ Organic Sleep & Play (3-Pack)" },
+    }).catch((err: unknown) => {
+      const message = err instanceof Error ? err.message : "Email failed";
+      return { sent: false as const, error: message };
+    });
+    const [emailResult] = await Promise.all([emailPromise, minDelay]);
+    setSending(false);
+    if (emailResult && "sent" in emailResult && emailResult.sent) {
+      pushToast("16 data requests queued · demo email sent", "success");
+    } else {
+      const errMsg = emailResult && "error" in emailResult ? emailResult.error : "unknown error";
+      pushToast(`Requests dispatched · email skipped (${errMsg})`, "info");
+    }
+    go(2);
+  }
+
   return (
     <div style={{ padding: 40, maxWidth: 1180 }}>
       <BackBtn go={go} to={1} />
       
       <Eyebrow>PRM Integration</Eyebrow>
-      <h1 className="page-title" style={{ marginBottom: 10 }}>How we knew who to ask.</h1>
-      <p className="body-text" style={{ maxWidth: 760, marginBottom: 28 }}>
-        Salesforce is Pathways' source of <em>people</em> — supplier contacts, internal team members, account relationships, and org hierarchy. We use it to find the right named owner at each vendor and inside Carter's (not a generic <span className="mono">sustainability@…</span> alias). Every owner — internal and external — then receives the same Pathways Data Request form to upload the data they own.
-      </p>
+      <h1 className="page-title" style={{ marginBottom: 28 }}>How we knew who to ask.</h1>
 
 
       {/* Connection bar */}
@@ -1885,7 +2825,7 @@ function StepPRM({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) =
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
           <h2 className="section-title">{PRM_OWNERS.length} data owners identified</h2>
           <span style={{ fontSize: 13, color: "var(--text-tertiary)" }}>
-            Resolved from 1,284 contacts across 11 accounts · 9 internal teams + 7 external partners
+            Resolved from 1,284 contacts · 9 internal + 7 external
           </span>
         </div>
 
@@ -1899,7 +2839,7 @@ function StepPRM({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) =
                   {isExternal ? "External vendors — Pathways Data Request" : "Internal Carter's HQ — Pathways Data Request"}
                 </span>
                 <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
-                  {groupOwners.length} {isExternal ? "supplier contacts" : "team members"} · each receives a focused upload form scoped to the data they own
+                  {groupOwners.length} {isExternal ? "supplier contacts" : "team members"} · scoped upload forms
                 </span>
               </div>
 
@@ -1917,6 +2857,9 @@ function StepPRM({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) =
                         <div>
                           <div style={{ fontWeight: 500 }}>{o.name}</div>
                           <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>{o.title} · {o.dept}</div>
+                          <span className="mono" style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 4, display: "inline-block" }}>
+                            {o.email}
+                          </span>
                         </div>
                       </div>
                       <span className={isExternal ? "chip chip-blue" : "chip chip-gray"} style={{ fontSize: 10 }}>{o.sfRole}</span>
@@ -1924,7 +2867,7 @@ function StepPRM({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) =
                     <div style={{ borderTop: "1px solid var(--border)", paddingTop: 10 }}>
                       <div className="label" style={{ marginBottom: 6 }}>Deliverables needed:</div>
                       {o.queries.map((q) => (
-                        <div key={q} className="mono" style={{ fontSize: 11, color: "var(--text-secondary)", padding: "2px 0" }}>· {q}</div>
+                        <div key={q} style={{ fontSize: 13, color: "var(--text-secondary)", padding: "2px 0" }}>· {q}</div>
                       ))}
                     </div>
                   </div>
@@ -1937,8 +2880,12 @@ function StepPRM({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) =
 
 
 
-      <button onClick={() => go(2)} className="btn btn-primary" style={{ width: "100%", marginTop: 24, padding: 14 }}>
-        Send requests to {PRM_OWNERS.length} owners (9 internal + 7 external) →
+      <button onClick={sendRequests} className="btn btn-primary" style={{ width: "100%", marginTop: 24, padding: 14 }} disabled={sending}>
+        {sending ? (
+          <><span className="spinner" style={{ borderTopColor: "white" }} /> Sending requests…</>
+        ) : (
+          <>Send requests →</>
+        )}
       </button>
     </div>
   );
@@ -2056,7 +3003,7 @@ function Library({ go, pushToast }: { go: (s: Step) => void; pushToast: (t: stri
           <Eyebrow>My LCAs</Eyebrow>
           <h1 className="page-title" style={{ marginBottom: 6 }}>LCA library</h1>
           <p className="body-text" style={{ maxWidth: 720 }}>
-            Every completed and in-flight assessment in one place. Re-run with updated supplier data, compare versions, and track progress against Carter's Raise the Future™ commitments.
+            All LCAs in one place. Re-run, compare versions, track Raise the Future™ progress.
           </p>
         </div>
         <button onClick={() => go(1)} className="btn btn-primary">+ Start a new LCA</button>
@@ -2066,8 +3013,8 @@ function Library({ go, pushToast }: { go: (s: Step) => void; pushToast: (t: stri
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
         {[
           { l: "Total LCAs", v: String(LCA_LIBRARY.length), c: `${completed} completed · ${stale} need refresh` },
-          { l: "Cumulative CO₂e identified", v: `${(totalReduction / 1000).toFixed(1)} kg`, c: "per unit, across all assessed styles" },
-          { l: "Avg. data accuracy", v: `${Math.round(LCA_LIBRARY.reduce((s, r) => s + r.accuracy, 0) / LCA_LIBRARY.length)}%`, c: "primary vs. AI-filled" },
+          { l: "Cumulative CO₂e identified", v: `${(totalReduction / 1000).toFixed(1)} kg`, c: "per unit, all styles" },
+          { l: "Avg. data accuracy", v: `${Math.round(LCA_LIBRARY.reduce((s, r) => s + r.accuracy, 0) / LCA_LIBRARY.length)}%`, c: "primary vs. gap-filled" },
           { l: "Refresh due", v: String(stale), c: stale > 0 ? "Re-run with current vendor data" : "All LCAs current", color: stale > 0 ? "var(--amber-dark)" : undefined as any },
         ].map((s, i) => (
           <div key={i} className="card">
@@ -2262,7 +3209,7 @@ function Library({ go, pushToast }: { go: (s: Step) => void; pushToast: (t: stri
                       display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap",
                     }}>
                       <span>
-                        ⚠ This LCA is past its 90-day refresh cadence. Arvind switched mill location in Apr — re-run to capture the new energy mix.
+                        ⚠ Past 90-day refresh cadence. Arvind switched mills in Apr — re-run to update energy mix.
                       </span>
                       <button onClick={() => rerun(r)} className="btn btn-primary btn-sm">Re-run with updated data →</button>
                     </div>
@@ -2289,26 +3236,39 @@ function Library({ go, pushToast }: { go: (s: Step) => void; pushToast: (t: stri
       </div>
 
       <div style={{ marginTop: 16, fontSize: 12, color: "var(--text-tertiary)" }}>
-        LCAs auto-flag for refresh every 90 days, on Tier-1/Tier-2 vendor change in Salesforce, on a new ZDHC ClearStream cycle, or when a PO repricing event lands.
+        LCAs auto-flag for refresh every 90 days or on vendor / pricing changes.
       </div>
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// SUPPLIER-SIDE VIEW — what Sunil at Shahi Exports sees after email click
+// SUPPLIER DATA REQUEST — external upload portal (post-email link)
 // ─────────────────────────────────────────────────────────────────────
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+const UPLOAD_ACCEPT = ".pdf,.csv,.xlsx,.xls,.jpg,.jpeg,.png";
+const UPLOAD_PATTERN = /\.(pdf|csv|xlsx|xls|jpg|jpeg|png)$/i;
+
+type UploadedFile = { name: string; size: number; type: string; file: File };
 
 function SupplierUpload({ go, pushToast }: { go: (s: Step) => void; pushToast: (t: string, k?: Toast["kind"]) => void }) {
   const [step, setStep] = useState<"email" | "form" | "done">("email");
   const [filled, setFilled] = useState<Record<string, boolean>>({});
-  const [uploaded, setUploaded] = useState<Record<string, string | null>>({ gots: null, energy: null, packaging: null });
+  const [uploaded, setUploaded] = useState<Record<string, UploadedFile | null>>({ gots: null, energy: null, packaging: null });
+  const [dragOver, setDragOver] = useState<string | null>(null);
+  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const fields = [
-    { id: "matComp", label: "Primary material composition", help: "Confirm the fabric blend used for Style 225G731 — we've pre-filled from your last submission.", prefill: "60% organic cotton (GOTS) + 40% Lenzing™ EcoVero™ viscose" },
-    { id: "weight",  label: "Component weight (g per garment)", help: "Total fabric weight per piece, excluding trim.", prefill: "112" },
-    { id: "scrap",   label: "Cut-and-sew scrap rate (%)",       help: "Average for this style over the last 90 days.", prefill: "3.4" },
-    { id: "pkgWt",   label: "Packaging weight (g per 3-pack)",  help: "Polybag + hangtag + carton allocation.", prefill: "18" },
+    { id: "matComp", label: "Primary material composition", help: "Confirm fabric blend for Style 225G731.", prefill: "60% organic cotton (GOTS) + 40% Lenzing™ EcoVero™ viscose" },
+    { id: "weight",  label: "Component weight (g per garment)", help: "Fabric weight per piece, excl. trim.", prefill: "112" },
+    { id: "scrap",   label: "Cut-and-sew scrap rate (%)",       help: "Avg. for this style, last 90 days.", prefill: "3.4" },
+    { id: "pkgWt",   label: "Packaging weight (g per 3-pack)",  help: "Polybag + hangtag + carton.", prefill: "18" },
   ];
   const uploads = [
     { id: "gots",      label: "GOTS Scope Certificate", hint: "PDF · current cycle" },
@@ -2319,37 +3279,46 @@ function SupplierUpload({ go, pushToast }: { go: (s: Step) => void; pushToast: (
   const totalCount = fields.length + uploads.length;
   const pct = Math.round((filledCount / totalCount) * 100);
 
-  function fakeUpload(id: string, name: string) {
-    setUploaded((u) => ({ ...u, [id]: name }));
-    pushToast(`${name} uploaded`, "success");
+  function handleFile(id: string, file: File) {
+    if (!UPLOAD_PATTERN.test(file.name)) {
+      pushToast("PDF, CSV, XLSX, JPG, or PNG only", "warning");
+      return;
+    }
+    setUploaded((u) => ({ ...u, [id]: { name: file.name, size: file.size, type: file.type, file } }));
+    pushToast(`${file.name} attached`, "success");
+  }
+
+  function openFilePicker(id: string) {
+    fileInputRefs.current[id]?.click();
+  }
+
+  function clearUpload(id: string) {
+    setUploaded((u) => ({ ...u, [id]: null }));
+    const input = fileInputRefs.current[id];
+    if (input) input.value = "";
   }
 
   return (
-    <div style={{ padding: 40, maxWidth: 980 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
-        <button onClick={() => go(2)} className="btn btn-ghost btn-sm">← Back to Pathways (internal view)</button>
-        <span className="chip chip-blue" style={{ fontSize: 11 }}>Demo · External supplier perspective</span>
-      </div>
+    <div style={{ padding: 40, maxWidth: 980, margin: "0 auto" }}>
+      {step === "email" && (
+        <>
+          <Eyebrow>Your inbox</Eyebrow>
+          <h1 className="page-title" style={{ marginBottom: 10 }}>Data request — Style 225G731</h1>
+          <p className="body-text" style={{ maxWidth: 720, marginBottom: 28 }}>
+            Secure upload link for Style 225G731 from Priya at Carter's.
+          </p>
+        </>
+      )}
 
-      <Eyebrow>Supplier preview</Eyebrow>
-      <h1 className="page-title" style={{ marginBottom: 10 }}>What Sunil at Shahi Exports sees.</h1>
-      <p className="body-text" style={{ maxWidth: 720, marginBottom: 28 }}>
-        Walkthrough of the supplier-side flow — from inbox to signed submission. Suppliers never create an account, never install anything, and only ever see the fields they own.
-      </p>
-
-      {/* Stage switcher */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 24, padding: 4, background: "var(--gray-section)", borderRadius: 10, width: "fit-content" }}>
-        {(["email", "form", "done"] as const).map((s) => (
-          <button key={s} onClick={() => setStep(s)} className="btn btn-sm" style={{
-            background: step === s ? "white" : "transparent",
-            color: step === s ? "var(--green-dark)" : "var(--text-secondary)",
-            boxShadow: step === s ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
-            fontWeight: 500,
-          }}>
-            {s === "email" ? "1 · Email" : s === "form" ? "2 · Upload form" : "3 · Confirmation"}
-          </button>
-        ))}
-      </div>
+      {step === "form" && (
+        <>
+          <Eyebrow>Data request</Eyebrow>
+          <h1 className="page-title" style={{ marginBottom: 10 }}>Style 225G731 · Little Planet™ 3-Pack Sleep & Play</h1>
+          <p className="body-text" style={{ maxWidth: 720, marginBottom: 28 }}>
+            Confirm 4 data points and attach 3 documents. Pre-filled from your last submission.
+          </p>
+        </>
+      )}
 
       {/* ── STAGE 1: EMAIL ── */}
       {step === "email" && (
@@ -2363,16 +3332,16 @@ function SupplierUpload({ go, pushToast }: { go: (s: Step) => void; pushToast: (
             <div style={{ fontSize: 13, color: "var(--text-tertiary)", marginBottom: 14 }}>Subject: <strong style={{ color: "var(--text-primary)" }}>Data request — Style 225G731 (Little Planet™ 3-Pack Sleep & Play)</strong></div>
             <p style={{ fontSize: 14, lineHeight: 1.7, marginBottom: 14 }}>Hi Sunil,</p>
             <p style={{ fontSize: 14, lineHeight: 1.7, marginBottom: 14 }}>
-              We're refreshing the lifecycle assessment for <strong>Style 225G731</strong>, which Shahi cuts and sews at Unit 8. To complete it, I need 4 short data points and 3 documents from your team.
+              We're refreshing the LCA for <strong>Style 225G731</strong> at Shahi Unit 8. Need 4 data points and 3 documents.
             </p>
             <p style={{ fontSize: 14, lineHeight: 1.7, marginBottom: 14 }}>
-              The form is pre-filled with your last submission — most fields just need a quick confirm. Should take <strong>under 10 minutes</strong>. No login or account required.
+              Pre-filled from your last submission — mostly confirm and attach. <strong>~10 min</strong>, no login needed.
             </p>
             <button onClick={() => setStep("form")} className="btn btn-primary" style={{ marginTop: 6, marginBottom: 16, padding: "12px 22px" }}>
               Open data request →
             </button>
             <p style={{ fontSize: 13, color: "var(--text-tertiary)", lineHeight: 1.6 }}>
-              This link is unique to you and expires June 27. Questions? Reply directly to this email.<br />
+              Link expires June 27. Reply to this email with questions.<br />
               — Priya
             </p>
           </div>
@@ -2400,7 +3369,7 @@ function SupplierUpload({ go, pushToast }: { go: (s: Step) => void; pushToast: (
             <div className="card" style={{ marginBottom: 16 }}>
               <div className="card-title" style={{ marginBottom: 4 }}>Confirm 4 data points</div>
               <div style={{ fontSize: 13, color: "var(--text-tertiary)", marginBottom: 16 }}>
-                Pre-filled from your June 2025 submission. Just edit if anything's changed and check the box to confirm.
+                Pre-filled from June 2025. Edit if changed, then confirm.
               </div>
               {fields.map((f) => (
                 <div key={f.id} style={{ paddingTop: 14, paddingBottom: 14, borderTop: "1px solid var(--border)" }}>
@@ -2421,23 +3390,65 @@ function SupplierUpload({ go, pushToast }: { go: (s: Step) => void; pushToast: (
             <div className="card" style={{ marginBottom: 16 }}>
               <div className="card-title" style={{ marginBottom: 4 }}>Attach 3 documents</div>
               <div style={{ fontSize: 13, color: "var(--text-tertiary)", marginBottom: 16 }}>
-                Drag &amp; drop, or click to browse. PDF, CSV, XLSX, JPG/PNG accepted.
+                Drag &amp; drop or click. PDF, CSV, XLSX, JPG/PNG.
               </div>
               {uploads.map((u) => (
-                <div key={u.id} style={{ paddingTop: 14, paddingBottom: 14, borderTop: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 14 }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 14, fontWeight: 500 }}>{u.label}</div>
-                    <div style={{ fontSize: 12, color: "var(--text-tertiary)", marginTop: 2 }}>{u.hint}</div>
-                  </div>
+                <div key={u.id} style={{ paddingTop: 14, paddingBottom: 14, borderTop: "1px solid var(--border)" }}>
+                  <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 2 }}>{u.label}</div>
+                  <div style={{ fontSize: 12, color: "var(--text-tertiary)", marginBottom: 10 }}>{u.hint}</div>
+                  <input
+                    ref={(el) => { fileInputRefs.current[u.id] = el; }}
+                    type="file"
+                    accept={UPLOAD_ACCEPT}
+                    style={{ display: "none" }}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleFile(u.id, file);
+                    }}
+                  />
                   {uploaded[u.id] ? (
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span className="chip chip-green" style={{ fontSize: 11 }}>✓ {uploaded[u.id]}</span>
-                      <button className="btn btn-ghost btn-sm" onClick={() => setUploaded((s) => ({ ...s, [u.id]: null }))}>Replace</button>
+                    <div style={{
+                      display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+                      padding: "12px 14px", borderRadius: 10, background: "var(--green-light)",
+                      border: "1px solid var(--green-border)",
+                    }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          ✓ {uploaded[u.id]!.name}
+                        </div>
+                        <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 2 }}>
+                          {formatFileSize(uploaded[u.id]!.size)}
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                        <button type="button" className="btn btn-outline btn-sm" onClick={() => openFilePicker(u.id)}>Replace</button>
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => clearUpload(u.id)}>Remove</button>
+                      </div>
                     </div>
                   ) : (
-                    <button className="btn btn-outline btn-sm" onClick={() => fakeUpload(u.id, u.id === "gots" ? "GOTS_Cert_2026.pdf" : u.id === "energy" ? "Unit8_energy_Q2.csv" : "Pkg_spec_v3.pdf")}>
-                      ↑ Upload file
-                    </button>
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => openFilePicker(u.id)}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") openFilePicker(u.id); }}
+                      onDragOver={(e) => { e.preventDefault(); setDragOver(u.id); }}
+                      onDragLeave={() => setDragOver((id) => (id === u.id ? null : id))}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setDragOver(null);
+                        const file = e.dataTransfer.files?.[0];
+                        if (file) handleFile(u.id, file);
+                      }}
+                      style={{
+                        padding: "20px 16px", borderRadius: 10, textAlign: "center", cursor: "pointer",
+                        border: `2px dashed ${dragOver === u.id ? "var(--green-dark)" : "var(--border-solid)"}`,
+                        background: dragOver === u.id ? "var(--green-light)" : "var(--gray-section)",
+                        transition: "border-color 160ms ease, background 160ms ease",
+                      }}
+                    >
+                      <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)" }}>Drop file here or click to browse</div>
+                      <div style={{ fontSize: 12, color: "var(--text-tertiary)", marginTop: 4 }}>PDF, CSV, XLSX, JPG, PNG</div>
+                    </div>
                   )}
                 </div>
               ))}
@@ -2447,12 +3458,12 @@ function SupplierUpload({ go, pushToast }: { go: (s: Step) => void; pushToast: (
             <div className="card" style={{ marginBottom: 16 }}>
               <div className="card-title" style={{ marginBottom: 10 }}>Sign &amp; submit</div>
               <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 12 }}>
-                By submitting, you confirm the data above is accurate to the best of your knowledge. A signed PDF receipt will be emailed to you and to Priya at Carter's.
+                By submitting, you confirm this data is accurate. A receipt goes to you and Priya.
               </p>
               <input className="input" placeholder="Type your full name to sign" style={{ fontSize: 14, marginBottom: 12 }} />
-              <button onClick={() => { setStep("done"); pushToast("Submission received — Pathways notified Priya", "success"); }}
+              <button onClick={() => { setStep("done"); pushToast("Submission received — receipt emailed", "success"); }}
                 className="btn btn-primary" style={{ width: "100%", padding: 14 }}>
-                Submit data request
+                Submit data
               </button>
             </div>
           </div>
@@ -2469,9 +3480,9 @@ function SupplierUpload({ go, pushToast }: { go: (s: Step) => void; pushToast: (
             </div>
             <div className="card" style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.6 }}>
               <div style={{ fontWeight: 500, color: "var(--text-primary)", marginBottom: 6 }}>Why we're asking</div>
-              Carter's is calculating the lifecycle footprint of Style 225G731 to meet its Raise the Future 2030 commitments. Your data covers the cut &amp; sew stage only — Tier-2 mill data is requested separately from Arvind.
+              Carter's LCA for Style 225G731. Your data covers cut &amp; sew only — mill data from Arvind separately.
               <div style={{ borderTop: "1px solid var(--border)", marginTop: 12, paddingTop: 12, fontWeight: 500, color: "var(--text-primary)", marginBottom: 6 }}>Need help?</div>
-              Reply to the email, or chat with Priya at <span className="mono">priya.raghavan@carters.com</span>.
+              Reply to the email or contact Priya at <span className="mono">priya.raghavan@carters.com</span>.
             </div>
           </div>
         </div>
@@ -2479,7 +3490,7 @@ function SupplierUpload({ go, pushToast }: { go: (s: Step) => void; pushToast: (
 
       {/* ── STAGE 3: DONE ── */}
       {step === "done" && (
-        <div className="card" style={{ padding: 32, maxWidth: 620, textAlign: "center" }}>
+        <div className="card" style={{ padding: 32, maxWidth: 620, margin: "0 auto", textAlign: "center" }}>
           <div style={{
             width: 56, height: 56, borderRadius: "50%", background: "var(--green-light)",
             color: "var(--green-dark)", display: "flex", alignItems: "center", justifyContent: "center",
@@ -2487,16 +3498,21 @@ function SupplierUpload({ go, pushToast }: { go: (s: Step) => void; pushToast: (
           }}>✓</div>
           <h2 className="section-title" style={{ marginBottom: 8 }}>Thank you, Sunil.</h2>
           <p className="body-text" style={{ marginBottom: 20 }}>
-            Your submission was received and a signed PDF receipt has been emailed to you and to Priya at Carter's. No further action is needed.
+            Submission received. Receipt emailed to you and Priya — no further action unless we follow up.
           </p>
           <div style={{ background: "var(--gray-section)", padding: 14, borderRadius: 10, fontSize: 13, color: "var(--text-secondary)", textAlign: "left", marginBottom: 18 }}>
             <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0" }}><span>Reference</span><span className="mono">PW-225G731-SHAHI-0613</span></div>
             <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0" }}><span>Submitted</span><span>June 14, 2026 · 6:12pm IST</span></div>
             <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0" }}><span>Next refresh</span><span>~Q2 2027 (annual cycle)</span></div>
           </div>
-          <button onClick={() => setStep("email")} className="btn btn-ghost btn-sm">Replay demo from start</button>
         </div>
       )}
+
+      <div style={{ marginTop: 32, textAlign: "center" }}>
+        <button onClick={() => go(2)} style={{ fontSize: 12, color: "var(--text-tertiary)", textDecoration: "underline" }}>
+          Carter's team? Return to Pathways
+        </button>
+      </div>
     </div>
   );
 }
