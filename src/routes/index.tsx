@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, useRef, type ReactNode } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LabelList } from "recharts";
 import pathwaysLogo from "@/assets/pathwayslogo.png";
+import salesforceLogo from "@/assets/salesforcelogo.webp";
 import sleepAndPlayImg from "@/assets/sleepandplay.webp";
 import { calculateScenario, getActionRecommendations, runProductIntake } from "@/lib/api/lca.functions";
 import { sendDataRequestEmails } from "@/lib/api/demo.functions";
@@ -96,12 +97,12 @@ function SourceBadge({ source }: { source?: "verified" | "ai_estimated" | "estim
   );
 }
 
-const STEP_LABELS = ["Intake", "Data", "Gap fill", "Footprint", "Actions", "Scenario", "Assign"];
+const STEP_LABELS = ["Intake", "Collect", "Gap fill", "Footprint", "Actions", "Scenario", "Assign"];
 
 const TABS: { id: Step; label: string }[] = [
   { id: 1, label: "Intake" },
-  { id: "prm", label: "PRM" },
-  { id: 2, label: "Data" },
+  { id: "prm", label: "Request" },
+  { id: 2, label: "Collect" },
   { id: 3, label: "Gap fill" },
   { id: "model", label: "Model" },
   { id: 4, label: "Footprint" },
@@ -127,7 +128,7 @@ const I = {
   doc: () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>,
   envelope: () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg>,
   team: () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
-  star: () => <span style={{ color: "#D4892A" }}>★</span>,
+  star: () => <span style={{ color: "var(--amber)" }}>★</span>,
   chevron: () => <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>▾</span>,
 };
 
@@ -759,7 +760,7 @@ function Step1({ lcaData, setLcaData, go, pushToast }: { lcaData: LcaData; setLc
 
 
         <button onClick={handleStartLca} className="btn btn-primary" style={{ width: "100%", marginTop: 24, padding: "14px" }} disabled={submitting}>
-          {submitting ? <><span className="spinner" style={{ borderTopColor: "white" }} /> Setting up your LCA…</> : "Connect PRM & start LCA →"}
+          {submitting ? <><span className="spinner" style={{ borderTopColor: "white" }} /> Setting up your LCA…</> : "Send requests & start LCA →"}
         </button>
         {lcaData.pipelineStatus === "error" && (
           <div style={{ marginTop: 12, fontSize: 13, color: "var(--amber)" }}>{lcaData.pipelineError}</div>
@@ -796,6 +797,121 @@ const REQUESTS: { id: string; icon: ReactNode; title: string; body: string; who:
 ];
 
 
+function CollectRequestCard({
+  r,
+  isInternal,
+  reminders,
+  onSendReminder,
+  onViewResponse,
+  onOpenSupplier,
+}: {
+  r: (typeof REQUESTS)[number];
+  isInternal: boolean;
+  reminders: number;
+  onSendReminder: () => void;
+  onViewResponse: () => void;
+  onOpenSupplier: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const ownerName = r.who.split(" · ")[0];
+  const isPending = r.status === "pending";
+  const sentShort = r.sent.replace(" at ", " · ");
+  const receivedShort = r.received === "-" ? null : r.received.replace(" at ", " · ");
+
+  return (
+    <div
+      className="card card-hover"
+      style={{
+        padding: 14,
+        ...(isPending ? {
+          background: "var(--amber-light)",
+          border: "1px solid var(--amber-border)",
+        } : {}),
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1 }}>
+          <div style={{
+            width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+            background: isInternal ? "var(--green-light)" : "#EAF2FB",
+            color: isInternal ? "var(--green-dark)" : "#1E4FA3",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>{r.icon}</div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontWeight: 500, fontSize: 14 }}>{ownerName}</div>
+            <div style={{ fontSize: 12, color: "var(--text-tertiary)", marginTop: 2 }}>
+              {isPending
+                ? <>Sent {sentShort}{reminders > 0 && ` · ${reminders} reminder${reminders > 1 ? "s" : ""}`}</>
+                : <>Received {receivedShort ?? sentShort}</>}
+            </div>
+          </div>
+        </div>
+        {isPending ? (
+          <button
+            onClick={onSendReminder}
+            className="btn btn-sm"
+            style={{
+              flexShrink: 0,
+              background: "var(--amber)",
+              color: "var(--text-primary)",
+              border: "1px solid var(--amber-border)",
+              fontWeight: 600,
+              padding: "6px 12px",
+              fontSize: 12,
+            }}
+          >
+            {reminders > 0 ? `Remind (${reminders}) →` : "Send reminder →"}
+          </button>
+        ) : (
+          <span className="chip chip-green" style={{ flexShrink: 0, fontSize: 11 }}>Completed</span>
+        )}
+      </div>
+
+      <div style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 10, lineHeight: 1.45 }}>{r.body}</div>
+
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          width: "100%",
+          marginTop: 10,
+          padding: 0,
+          background: "none",
+          border: "none",
+          cursor: "pointer",
+          fontSize: 12,
+          color: "var(--text-secondary)",
+        }}
+      >
+        <span className="label">{expanded ? "Hide details" : "Details"}</span>
+        <span style={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform 150ms ease" }}>▾</span>
+      </button>
+
+      {expanded && (
+        <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--border)" }}>
+          <div style={{ fontSize: 12, color: "var(--text-tertiary)", display: "flex", flexDirection: "column", gap: 3, marginBottom: 12 }}>
+            <div><span className="label" style={{ marginRight: 6 }}>Sent</span>{r.sent}</div>
+            <div><span className="label" style={{ marginRight: 6 }}>Received</span>{r.received}</div>
+          </div>
+          {isPending ? (
+            <button onClick={onOpenSupplier} className="btn btn-ghost btn-sm" style={{ color: "var(--text-secondary)", padding: "6px 0" }}>
+              Open request form ↗
+            </button>
+          ) : (
+            <button onClick={onViewResponse} className="btn btn-outline btn-sm" style={{ color: "var(--green-dark)", borderColor: "var(--green-border)" }}>
+              View response →
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Step2({ lcaData, setLcaData, go, pushToast }: { lcaData: LcaData; setLcaData: (f: (d: LcaData) => LcaData) => void; go: (s: Step) => void; pushToast: (t: string, k?: Toast["kind"]) => void }) {
   const [modalOpen, setModalOpen] = useState(false);
   const total = REQUESTS.length;
@@ -814,7 +930,7 @@ function Step2({ lcaData, setLcaData, go, pushToast }: { lcaData: LcaData; setLc
   return (
     <div style={{ padding: 40 }}>
       <BackBtn go={go} to="prm" />
-      <Eyebrow>Data Collection</Eyebrow>
+      <Eyebrow>Collect</Eyebrow>
       <h1 className="page-title" style={{ marginBottom: 10 }}>Requests sent to {total} owners.</h1>
       <div style={{ maxWidth: 1100, marginBottom: 32 }}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
@@ -823,8 +939,8 @@ function Step2({ lcaData, setLcaData, go, pushToast }: { lcaData: LcaData; setLc
           </span>
           <span style={{ fontSize: 13, color: "var(--text-tertiary)" }}>{Math.round((done / total) * 100)}%</span>
         </div>
-        <div style={{ height: 6, background: "var(--border-solid)", borderRadius: 4, overflow: "hidden" }}>
-          <div style={{ width: `${(done / total) * 100}%`, height: "100%", background: "var(--green-dark)", transition: "width 400ms ease" }} />
+        <div className="progress-bar">
+          <div className="progress-bar-fill" style={{ width: `${(done / total) * 100}%` }} />
         </div>
       </div>
 
@@ -842,52 +958,21 @@ function Step2({ lcaData, setLcaData, go, pushToast }: { lcaData: LcaData; setLc
                 {groupDone} of {items.length} responses
               </span>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, maxWidth: 1100 }}>
-              {items.map((r) => {
-                const reminders = lcaData.reminderCounts[r.id] ?? 0;
-                const ownerName = r.who.split(" · ")[0];
-                return (
-                <div key={r.id} className="card card-hover">
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <div style={{ color: "var(--text-secondary)" }}>{r.icon}</div>
-                      <div className="card-title">{r.title}</div>
-                    </div>
-                    {r.status === "done"
-                      ? <span className="chip chip-green">Completed</span>
-                      : <span className="chip chip-amber">Awaiting response</span>}
-                  </div>
-                  <div className="body-text" style={{ fontSize: 14, marginBottom: 16 }}>{r.body}</div>
-                  <div style={{ fontSize: 12, color: "var(--text-tertiary)", display: "flex", flexDirection: "column", gap: 4 }}>
-                    <div><span className="label" style={{ marginRight: 6 }}>Owner</span> {r.who}</div>
-                    <div><span className="label" style={{ marginRight: 6 }}>Sent</span> {r.sent}</div>
-                    <div><span className="label" style={{ marginRight: 6 }}>Received</span> {r.received}</div>
-                    {r.status === "pending" && (
-                      <div><span className="label" style={{ marginRight: 6 }}>Reminders</span> {reminders} sent</div>
-                    )}
-                  </div>
-                  <div style={{ marginTop: 16, borderTop: "1px solid var(--border)", paddingTop: 14 }}>
-                    {r.status === "done" ? (
-                      <button onClick={() => r.id === "sourcing" ? setModalOpen(true) : pushToast(`Opened ${r.title} response`, "info")}
-                        className="btn btn-outline btn-sm" style={{ color: "var(--green-dark)", borderColor: "var(--green-border)" }}>
-                        View response →
-                      </button>
-                    ) : (
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        <button onClick={() => sendReminder(r.id, ownerName)}
-                          className="btn btn-outline btn-sm" style={{ color: "var(--amber)", borderColor: "var(--amber-border)" }}>
-                          {reminders > 0 ? `Send reminder (${reminders} sent) →` : "Send reminder →"}
-                        </button>
-                        <button onClick={() => go("supplier")}
-                          className="btn btn-ghost btn-sm" style={{ color: "var(--text-secondary)" }}>
-                          Open data request ↗
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                );
-              })}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, maxWidth: 1100 }}>
+              {items.map((r) => (
+                <CollectRequestCard
+                  key={r.id}
+                  r={r}
+                  isInternal={isInternal}
+                  reminders={lcaData.reminderCounts[r.id] ?? 0}
+                  onSendReminder={() => sendReminder(r.id, r.who.split(" · ")[0])}
+                  onViewResponse={() => {
+                    if (r.id === "sourcing") setModalOpen(true);
+                    else pushToast(`Opened ${r.who.split(" · ")[0]}'s response`, "info");
+                  }}
+                  onOpenSupplier={() => go("supplier")}
+                />
+              ))}
             </div>
           </div>
         );
@@ -1541,7 +1626,7 @@ function Step4({ lcaData, go }: { lcaData: LcaData; go: (s: Step) => void }) {
                     formatter={(v: number, name: string) => [`${v.toLocaleString()} MJ`, name === "renewable" ? "Renewable" : "Non-renewable"]}
                   />
                   <Bar dataKey="renewable" stackId="energy" fill="#4A9B6F" radius={[0, 0, 0, 0]} onClick={(d: { name: string }) => setSelectedHotspot(d.name.toLowerCase())} />
-                  <Bar dataKey="nonRenewable" stackId="energy" fill="#D4892A" radius={[0, 6, 6, 0]} onClick={(d: { name: string }) => setSelectedHotspot(d.name.toLowerCase())}>
+                  <Bar dataKey="nonRenewable" stackId="energy" fill="var(--amber)" radius={[0, 6, 6, 0]} onClick={(d: { name: string }) => setSelectedHotspot(d.name.toLowerCase())}>
                     <LabelList
                       dataKey="value"
                       position="right"
@@ -1581,7 +1666,7 @@ function Step4({ lcaData, go }: { lcaData: LcaData; go: (s: Step) => void }) {
           {isEnergy && (
             <div style={{ display: "flex", gap: 16, marginTop: 12, fontSize: 12, color: "var(--text-secondary)" }}>
               <span><span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 2, background: "#4A9B6F", marginRight: 6 }} />Renewable ({impact.renewableTotal} MJ · {Math.round((impact.renewableTotal! / impact.total) * 100)}%)</span>
-              <span><span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 2, background: "#D4892A", marginRight: 6 }} />Non-renewable ({impact.nonRenewableTotal} MJ · {Math.round((impact.nonRenewableTotal! / impact.total) * 100)}%)</span>
+              <span><span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 2, background: "var(--amber)", marginRight: 6 }} />Non-renewable ({impact.nonRenewableTotal} MJ · {Math.round((impact.nonRenewableTotal! / impact.total) * 100)}%)</span>
             </div>
           )}
           <div style={{ marginTop: 12, fontSize: 12, color: "var(--text-tertiary)" }}>
@@ -1838,7 +1923,14 @@ function Step5({ lcaData, setLcaData, go, pushToast }: { lcaData: LcaData; setLc
               {p.cost < 0 ? "−$" : "+$"}{Math.abs(p.cost).toFixed(2)}
             </span></div>
             <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{p.owner}</div>
-            <div><button onClick={() => assign(p)} className="btn btn-primary btn-sm">Assign</button></div>
+            <div>
+              <button
+                onClick={() => assign(p)}
+                style={{ fontSize: 13, color: "var(--green-dark)", fontWeight: 500, padding: 0 }}
+              >
+                Assign →
+              </button>
+            </div>
           </div>
         );})}
       </div>
@@ -2979,6 +3071,7 @@ function StepPRM({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) =
   const [ownersLoading, setOwnersLoading] = useState(true);
   const [lastSync, setLastSync] = useState("2 min ago");
   const [provider, setProvider] = useState<"salesforce" | "hubspot" | "dynamics">("salesforce");
+  const [confirmSendOpen, setConfirmSendOpen] = useState(false);
 
   useEffect(() => {
     setOwnersLoading(true);
@@ -2988,7 +3081,7 @@ function StepPRM({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) =
 
   function resync() {
     setSyncing(true);
-    setTimeout(() => { setSyncing(false); setLastSync("just now"); pushToast("PRM resynced: 16 owners confirmed across internal + external partners", "success"); }, 1100);
+    setTimeout(() => { setSyncing(false); setLastSync("just now"); pushToast("Data owners resynced: 16 owners confirmed across internal + external partners", "success"); }, 1100);
   }
 
   async function sendRequests() {
@@ -3015,25 +3108,32 @@ function StepPRM({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) =
     <div style={{ padding: 40, maxWidth: 1180 }}>
       <BackBtn go={go} to={1} />
       
-      <Eyebrow>PRM Integration</Eyebrow>
+      <Eyebrow>Request</Eyebrow>
       <h1 className="page-title" style={{ marginBottom: 28 }}>How we knew who to ask.</h1>
 
 
       {/* Connection bar */}
       <div className="card" style={{ padding: 18, marginBottom: 24, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <div style={{
-            width: 44, height: 44, borderRadius: 10, background: "#00A1E0",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            color: "white", fontWeight: 700, fontSize: 13, letterSpacing: "-0.02em",
-          }}>SF</div>
+          <img
+            src={salesforceLogo}
+            alt="Salesforce"
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 10,
+              objectFit: "contain",
+              display: "block",
+              flexShrink: 0,
+            }}
+          />
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ fontWeight: 500 }}>Salesforce · Carter's Inc. · Sourcing Production Org</span>
               {connected && <span className="chip chip-green"><span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--green-dark)" }} /> Connected</span>}
             </div>
             <div style={{ fontSize: 13, color: "var(--text-tertiary)", marginTop: 2 }}>
-              acme.my.salesforce.com · OAuth 2.0 · Read-only · Last sync {lastSync}
+              OAuth 2.0 · Read-only · Last sync {lastSync}
             </div>
           </div>
         </div>
@@ -3107,7 +3207,7 @@ function StepPRM({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) =
                           </span>
                         </div>
                       </div>
-                      <span className={isExternal ? "chip chip-blue" : "chip chip-gray"} style={{ fontSize: 10 }}>{o.sfRole}</span>
+                      <span className={isExternal ? "chip chip-blue" : "chip chip-navy"} style={{ fontSize: 10 }}>{o.sfRole}</span>
                     </div>
                     <PrmDeliverables queries={o.queries} />
                   </div>
@@ -3120,13 +3220,52 @@ function StepPRM({ lcaData, go, pushToast }: { lcaData: LcaData; go: (s: Step) =
 
 
 
-      <button onClick={sendRequests} className="btn btn-primary" style={{ width: "100%", marginTop: 24, padding: 14 }} disabled={sending}>
+      <button onClick={() => setConfirmSendOpen(true)} className="btn btn-primary" style={{ width: "100%", marginTop: 24, padding: 14 }} disabled={sending}>
         {sending ? (
           <><span className="spinner" style={{ borderTopColor: "white" }} /> Sending requests…</>
         ) : (
           <>Send requests →</>
         )}
       </button>
+
+      {confirmSendOpen && (
+        <Modal
+          onClose={() => setConfirmSendOpen(false)}
+          title="Send request emails?"
+          subtitle={`Queue ${PRM_OWNERS.length} data requests for ${lcaData.productName || "Little Planet™ Organic Sleep & Play (3-Pack)"}.`}
+        >
+          <p style={{ fontSize: 14, color: "var(--text-secondary)", marginBottom: 16, lineHeight: 1.5 }}>
+            Confirm you want to send request emails to:
+          </p>
+          <div style={{
+            maxHeight: 280, overflowY: "auto", marginBottom: 20,
+            border: "1px solid var(--border)", borderRadius: 10, padding: "4px 12px",
+          }}>
+            {PRM_OWNERS.map((o) => (
+              <div
+                key={o.name}
+                style={{
+                  display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12,
+                  padding: "8px 0", borderBottom: "1px solid var(--border)", fontSize: 13,
+                }}
+              >
+                <span style={{ fontWeight: 500 }}>{o.name}</span>
+                <span className="mono" style={{ fontSize: 12, color: "var(--text-tertiary)", textAlign: "right" }}>{o.email}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+            <button onClick={() => setConfirmSendOpen(false)} className="btn btn-outline">Cancel</button>
+            <button
+              onClick={() => { setConfirmSendOpen(false); sendRequests(); }}
+              className="btn btn-primary"
+              disabled={sending}
+            >
+              Send {PRM_OWNERS.length} requests →
+            </button>
+          </div>
+        </Modal>
+      )}
       </>
       )}
     </div>
@@ -3295,7 +3434,7 @@ function Library({ go, pushToast }: { go: (s: Step) => void; pushToast: (t: stri
             : "chip chip-gray";
           const stalenessBar =
             r.staleness === "fresh" ? "var(--green-dark)"
-            : r.staleness === "aging" ? "#D9A441"
+            : r.staleness === "aging" ? "var(--amber)"
             : "#C44545";
           return (
             <div key={r.id} style={{ borderBottom: "1px solid var(--border)" }}>

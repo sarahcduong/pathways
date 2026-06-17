@@ -13,9 +13,12 @@
   --green-mid: #2A2AB8;
   --green-light: #E6E6F5;
   --green-border: #B8B8E0;
-  --amber: #D4892A;
-  --amber-light: #FEF3E2;
-  --amber-border: #F0C070;
+  --accent-gradient: linear-gradient(180deg, #00008a 0%, #000080 100%);
+  --accent-gradient-hover: linear-gradient(180deg, #000070 0%, #000066 100%);
+  --progress-gradient: linear-gradient(90deg, #000080 0%, #1e1ea8 55%, #4040d8 100%);
+  --amber: #FBBF24;
+  --amber-light: #FEFCE8;
+  --amber-border: #FDE047;
   --red: #C84B31;
   --red-light: #FDECEA;
   --red-border: #F0A898;
@@ -71,8 +74,22 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   font-size: 14px; font-weight: 500; transition: all 180ms ease;
   white-space: nowrap;
 }
-.btn-primary { background: var(--green-dark); color: white; }
-.btn-primary:hover { background: #00005c; }
+.btn-primary {
+  background: var(--accent-gradient);
+  color: white;
+  box-shadow: 0 1px 2px rgba(0, 0, 80, 0.12);
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-gradient-hover);
+  box-shadow: 0 2px 6px rgba(0, 0, 80, 0.14);
+}
+.btn-primary:active:not(:disabled) { box-shadow: 0 1px 2px rgba(0, 0, 80, 0.1); }
+.btn-primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
 .btn-ghost { color: var(--text-secondary); }
 .btn-ghost:hover { background: var(--gray-section); color: var(--text-primary); }
 .btn-outline { border: 1px solid var(--border-solid); color: var(--text-primary); background: var(--surface); }
@@ -84,10 +101,11 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 500;
 }
 .chip-green { background: var(--green-light); color: var(--green-dark); }
-.chip-amber { background: var(--amber-light); color: var(--amber); }
+.chip-amber { background: var(--amber-light); color: #A16207; }
 .chip-red { background: var(--red-light); color: var(--red); }
 .chip-blue { background: var(--blue-light); color: var(--blue); }
 .chip-gray { background: var(--gray-section); color: var(--text-secondary); }
+.chip-navy { background: var(--green-light); color: var(--green-dark); border: 1px solid var(--green-border); }
 
 .input {
   width: 100%; padding: 12px 14px; border-radius: 10px;
@@ -96,6 +114,20 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   font-size: 15px;
 }
 .input:focus { outline: none; border-color: var(--green-dark); box-shadow: 0 0 0 3px rgba(0,0,128,0.12); }
+
+.progress-bar {
+  height: 8px;
+  background: var(--border-solid);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.progress-bar-fill {
+  height: 100%;
+  background: var(--progress-gradient);
+  border-radius: 999px;
+  transition: width 400ms ease;
+  box-shadow: 0 0 12px rgba(42, 42, 184, 0.35);
+}
 
 @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 .fade-in { animation: fadeIn 300ms ease; }
